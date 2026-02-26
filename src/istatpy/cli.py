@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+_HELP_FLAGS = {"--help", "-h"}
+
 import httpx
 import typer
 from rich.console import Console
@@ -37,7 +39,7 @@ def _check_api_reachable() -> None:
 
 @app.callback(invoke_without_command=True)
 def _startup(ctx: typer.Context) -> None:
-    if ctx.invoked_subcommand is not None:
+    if ctx.invoked_subcommand is not None and not _HELP_FLAGS.intersection(sys.argv):
         _check_api_reachable()
 
 
@@ -182,6 +184,80 @@ def get(
         else:
             df.write_csv(out)
         console.print(f"[green]Saved:[/green] {out}")
+
+
+@app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+def plot(
+    ctx: typer.Context,
+    dataset_id: str = typer.Argument(..., help="Dataset ID"),
+    x: str = typer.Option("TIME_PERIOD", "--x", help="Column for X axis"),
+    y: str = typer.Option("OBS_VALUE", "--y", help="Column for Y axis"),
+    color: Optional[str] = typer.Option(None, "--color", help="Column for color grouping"),
+    title: Optional[str] = typer.Option(None, "--title", help="Chart title (default: dataset description)"),
+    xlabel: Optional[str] = typer.Option(None, "--xlabel", help="X axis label (default: column name)"),
+    ylabel: Optional[str] = typer.Option(None, "--ylabel", help="Y axis label (default: column name)"),
+    out: Path = typer.Option(Path("chart.png"), "--out", help="Output file (.png/.pdf/.svg)"),
+    width: float = typer.Option(10.0, "--width", help="Chart width in inches"),
+    height: float = typer.Option(5.0, "--height", help="Chart height in inches"),
+):
+    """Plot data for a dataset as a line chart. Extra --DIM VALUE pairs are used as filters."""
+    from plotnine import aes, geom_line, geom_point, ggplot, labs, scale_x_date, theme_minimal
+
+    import polars as pl
+
+    from . import get_data, istat_dataset, set_filters
+
+    # Parse extra args as --KEY VALUE filters (same as get)
+    extra = ctx.args
+    filters = {}
+    i = 0
+    while i < len(extra):
+        arg = extra[i]
+        if arg.startswith("--") and i + 1 < len(extra):
+            key = arg[2:]
+            filters[key] = extra[i + 1]
+            i += 2
+        else:
+            err_console.print(f"[red]Unexpected argument:[/red] {arg}")
+            raise typer.Exit(1)
+
+    try:
+        ds = istat_dataset(dataset_id)
+        if filters:
+            ds = set_filters(ds, **filters)
+        df = get_data(ds)
+    except Exception as e:
+        err_console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+    if x not in df.columns or y not in df.columns:
+        err_console.print(f"[red]Error:[/red] columns '{x}' or '{y}' not found in data.")
+        err_console.print(f"Available columns: {', '.join(df.columns)}")
+        raise typer.Exit(1)
+
+    df = df.with_columns(pl.col(y).cast(pl.Float64, strict=False))
+    pdf = df.to_pandas()
+
+    aes_mapping = aes(x=x, y=y, color=color) if color else aes(x=x, y=y)
+    p = (
+        ggplot(pdf, aes_mapping)
+        + geom_line(size=1)
+        + geom_point(size=1.5)
+        + labs(
+            title=title or ds["df_description"],
+            x=xlabel or x,
+            y=ylabel or y,
+            caption="Source: ISTAT",
+        )
+        + theme_minimal()
+    )
+
+    # Add date scale if x column is a date
+    if hasattr(pdf[x], "dt"):
+        p = p + scale_x_date(date_breaks="2 years", date_labels="%Y")
+
+    p.save(str(out), dpi=150, width=width, height=height)
+    console.print(f"[green]Saved:[/green] {out}")
 
 
 def main():
