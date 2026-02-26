@@ -1,0 +1,25 @@
+[project]
+name = "istatpy"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "aborruso", email = "aborruso@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "duckdb>=1.4.4",
+    "httpx>=0.28.1",
+    "lxml>=6.0.2",
+    "plotnine>=0.15.3",
+    "polars>=1.38.1",
+    "pyarrow>=23.0.1",
+    "tenacity>=9.1.4",
+]
+
+[project.scripts]
+istatpy = "istatpy:main"
+
+[build-system]
+requires = ["uv_build>=0.9.7,<0.10.0"]
+build-backend = "uv_build"
