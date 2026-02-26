@@ -2,7 +2,11 @@
 
 Python interface to the Italian National Institute of Statistics (ISTAT) SDMX REST API.
 
-Inspired by the R package [istatR](https://github.com/jfulponi/istatR) and the Python package [istatapi](https://github.com/Attol8/istatapi).
+## Acknowledgements
+
+Special thanks to [@jfulponi](https://github.com/jfulponi) for the R package [istatR](https://github.com/jfulponi/istatR), which inspired this project and provided the foundation for the API design.
+
+Also inspired by the Python package [istatapi](https://github.com/Attol8/istatapi) by [@Attol8](https://github.com/Attol8).
 
 ## Installation
 
