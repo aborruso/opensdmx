@@ -13,6 +13,7 @@ from .discovery import (
     set_filters,
 )
 from .retrieval import get_data, istat_get, parse_time_period
+from .cli import main
 
 __all__ = [
     "all_available",

@@ -101,6 +101,42 @@ ISTAT: limite **5 query/minuto per IP**. Superato → blocco 1-2 giorni.
 
 ---
 
+---
+
+## Fase 9 - CLI
+
+### Obiettivo
+Implementare una CLI `istatpy` con 4 comandi usando Typer + Rich.
+
+### Phase 1 — Dipendenze
+- [x] `uv add typer rich`
+
+### Phase 2 — Crea `src/istatpy/cli.py`
+- [x] Typer app con 4 comandi:
+  - `search <keyword>` → tabella Rich df_id + df_description
+  - `info <dataset_id>` → pannello Rich metadati + tabella dimensioni
+  - `values <dataset_id> <dim>` → tabella Rich id + name
+  - `get <dataset_id> [--DIM VALUE ...] [--out FILE]` → CSV stdout o file (csv/parquet/json)
+- [x] Gestione errori con messaggi Rich e `raise typer.Exit(1)`
+
+### Phase 3 — Aggiorna `__init__.py`
+- [x] Importa `main` da `cli.py` e aggiungila a `__all__`
+
+### Phase 4 — Test
+- [x] `uv run istatpy --help`
+- [x] `uv run istatpy search --help`
+- [x] `uv run istatpy info --help`
+- [x] `uv run istatpy values --help`
+- [x] `uv run istatpy get --help`
+
+### Phase 5 — LOG.md
+- [x] Aggiorna LOG.md
+
+### Domande aperte
+- nessuna
+
+---
+
 ## Review
 
 - Struttura a 4 moduli: `base`, `utils`, `discovery`, `retrieval`

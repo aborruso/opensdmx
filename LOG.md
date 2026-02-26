@@ -1,5 +1,11 @@
 # LOG
 
+## 2026-02-26 (CLI)
+
+- CLI `istatpy` con 4 comandi: `search`, `info`, `values`, `get` (Typer + Rich)
+- `get` accetta filtri dinamici `--DIM VALUE` via `typer.Context`
+- Output `get`: CSV su stdout o file (csv/parquet/json) con `--out`
+
 ## 2026-02-26
 
 - Rate limiter: 12s minimi tra chiamate API, log in `/tmp/istatpy_rate_limit.log`
