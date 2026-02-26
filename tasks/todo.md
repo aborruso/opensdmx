@@ -1,8 +1,8 @@
 # istatPy - Development Plan
 
 ## Goal
-Python port of the R package `istatR`, managed with `uv`.
-ISTAT SDMX REST API: `https://esploradati.istat.it/SDMXWS/rest`
+Python port of the R package [`istatR`](https://github.com/jfulponi/istatR) by [@jfulponi](https://github.com/jfulponi) — many thanks for the inspiration and the original work.
+Managed with `uv`. ISTAT SDMX REST API: `https://esploradati.istat.it/SDMXWS/rest`
 
 ## Project structure
 ```
