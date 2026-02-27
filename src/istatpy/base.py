@@ -8,7 +8,7 @@ import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 _RATE_LIMIT_FILE = Path(tempfile.gettempdir()) / "istatpy_rate_limit.log"
-_MIN_INTERVAL = 12.0  # seconds between API calls
+_MIN_INTERVAL = 13.0  # seconds between API calls
 
 
 def _rate_limit_check() -> None:
@@ -19,8 +19,14 @@ def _rate_limit_check() -> None:
             elapsed = time.time() - last
             if elapsed < _MIN_INTERVAL:
                 wait = _MIN_INTERVAL - elapsed
-                print(f"[istatpy] Rate limit: waiting {wait:.1f}s...")
-                time.sleep(wait)
+                end_time = time.time() + wait
+                while True:
+                    remaining = end_time - time.time()
+                    if remaining <= 0:
+                        break
+                    print(f"\r[istatpy] Rate limit: waiting {remaining:.1f}s...  ", end="", flush=True)
+                    time.sleep(0.2)
+                print()
         except (ValueError, OSError):
             pass
     _RATE_LIMIT_FILE.write_text(str(time.time()))
