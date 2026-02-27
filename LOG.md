@@ -1,5 +1,11 @@
 # LOG
 
+## 2026-02-27 (semantic search)
+
+- New module `embed.py`: builds vector embeddings of catalog via ollama `nomic-embed-text-v2-moe` (768 dim, 4714 rows), cached in `/tmp/istatpy_embeddings.parquet`
+- New CLI command `istatpy embed`: generates/updates embeddings cache
+- New flag `istatpy search --semantic <query>`: cross-language semantic search (Italian → English) via cosine similarity
+
 ## 2026-02-26 (i18n)
 
 - Translated all user-facing messages to English (CLI + rate limiter)

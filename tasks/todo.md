@@ -129,6 +129,37 @@ Implement an `istatpy` CLI with 4 commands using Typer + Rich.
 
 ---
 
+---
+
+## Phase 10 - Semantic Search via Embeddings
+
+### Goal
+Add semantic search to the CLI so Italian queries find English-described datasets.
+
+### Questions
+- Multilingual model: `intfloat/multilingual-e5-small` via `fastembed` (leggero, no torch)?
+- Cache embeddings in `/tmp/istatpy_embeddings.parquet` (stessa logica del catalogo)?
+
+### Part 1 — Dependency
+- [x] `uv add ollama numpy`
+
+### Part 2 — New module `src/istatpy/embed.py`
+- [x] `build_embeddings()`: carica catalogo, encode `df_description` via ollama `nomic-embed-text-v2-moe`, salva `/tmp/istatpy_embeddings.parquet` (colonne: `df_id`, `embedding`)
+- [x] `semantic_search(query, n=10)`: encode query via ollama, cosine similarity con numpy, restituisce top-N come DataFrame `df_id, df_description, score`
+
+### Part 3 — CLI updates in `cli.py`
+- [x] Nuovo comando `embed`: chiama `build_embeddings()`, mostra progress
+- [x] Aggiunge flag `--semantic` al comando `search`: se presente usa `semantic_search()` invece di LIKE
+
+### Part 4 — Tests
+- [x] `uv run istatpy embed`
+- [x] `uv run istatpy search --semantic disoccupazione`
+
+### Part 5 — LOG.md
+- [x] Update
+
+---
+
 ## Review
 
 - 4-module structure: `base`, `utils`, `discovery`, `retrieval`
