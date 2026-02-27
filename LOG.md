@@ -1,10 +1,13 @@
 # LOG
 
-## 2026-02-27 (semantic search)
+## 2026-02-27
 
-- New module `embed.py`: builds vector embeddings of catalog via ollama `nomic-embed-text-v2-moe` (768 dim, 4714 rows), cached in `/tmp/istatpy_embeddings.parquet`
-- New CLI command `istatpy embed`: generates/updates embeddings cache
-- New flag `istatpy search --semantic <query>`: cross-language semantic search (Italian → English) via cosine similarity
+- `embed.py`: vector embeddings via ollama `nomic-embed-text-v2-moe` (768 dim), cached in `/tmp/istatpy_embeddings.parquet` (~11MB)
+- `istatpy embed`: builds embeddings cache; `istatpy search --semantic`: cross-language semantic search
+- `db_cache.py`: SQLite cache `/tmp/istatpy_cache.db` (TTL 7d) for dimensions and codelist values — cold 52s → cached 0.0s
+- Fix: use `ALL` instead of `IT1` as agency on `datastructure` and `codelist` endpoints (fixes 404 on cross-agency datasets)
+- `istatpy wizard`: interactive dataset discovery, paginated results, fuzzy value filtering (InquirerPy), auto-select DATA_DOMAIN, SDMX URL output
+- Rate limit: countdown timer (updates every 0.2s), interval raised to 13s
 
 ## 2026-02-26 (i18n)
 

@@ -103,6 +103,58 @@ plot = (
 plot.save("unemployment_rate.png", dpi=150, width=10, height=5)
 ```
 
+## CLI
+
+Install globally:
+
+```bash
+uv tool install istatpy
+```
+
+### Commands
+
+| Command | Description |
+|---|---|
+| `istatpy search <keyword>` | Keyword search in dataset descriptions |
+| `istatpy search --semantic <query>` | Semantic search (multilingual, requires `istatpy embed`) |
+| `istatpy embed` | Build semantic embeddings cache via Ollama |
+| `istatpy info <id>` | Show dataset metadata and dimensions |
+| `istatpy values <id> <dim>` | Show available values for a dimension |
+| `istatpy get <id> [--DIM VALUE] [--out file]` | Download data (CSV/parquet/JSON) |
+| `istatpy plot <id> [--DIM VALUE] [--out file]` | Plot data as line chart |
+| `istatpy wizard` | Interactive wizard to discover, filter and get download URL |
+
+### Wizard
+
+```bash
+istatpy wizard
+```
+
+Step-by-step interactive flow:
+
+1. Type a query in any language (Italian or English)
+2. Select a dataset from paginated results
+3. For each dimension: fuzzy-filter values and choose one (or skip with "all")
+4. Get the SDMX download URL and `curl` command
+
+### Semantic search setup
+
+Requires [Ollama](https://ollama.com) with the `nomic-embed-text-v2-moe` model:
+
+```bash
+ollama pull nomic-embed-text-v2-moe
+istatpy embed   # run once, builds /tmp/istatpy_embeddings.parquet
+istatpy search --semantic "disoccupazione"   # cross-language search
+```
+
+### Caching
+
+| File | Content | TTL |
+|---|---|---|
+| `/tmp/istatpy_dataflows.parquet` | Full catalog (4714 datasets) | 24h |
+| `/tmp/istatpy_embeddings.parquet` | Semantic embeddings (768-dim) | manual |
+| `/tmp/istatpy_cache.db` | Dimensions and codelist values (SQLite) | 7 days |
+
 ## API Reference
 
 - Base URL: `https://esploradati.istat.it/SDMXWS/rest`
