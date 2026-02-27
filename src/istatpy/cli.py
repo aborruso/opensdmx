@@ -44,8 +44,34 @@ def _startup(ctx: typer.Context) -> None:
 
 
 @app.command()
-def search(keyword: str = typer.Argument(..., help="Keyword to search in dataset descriptions")):
-    """Search datasets by keyword."""
+def search(
+    keyword: str = typer.Argument(..., help="Keyword to search in dataset descriptions"),
+    semantic: bool = typer.Option(False, "--semantic", "-s", help="Use semantic search via Ollama embeddings"),
+    n: int = typer.Option(10, "--n", help="Number of results (semantic mode only)"),
+):
+    """Search datasets by keyword (or semantically with --semantic)."""
+    if semantic:
+        from .embed import semantic_search
+        try:
+            df = semantic_search(keyword, n=n)
+        except FileNotFoundError as e:
+            err_console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
+        except Exception as e:
+            err_console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
+
+        table = Table(title=f"Semantic search: {keyword}", show_lines=False)
+        table.add_column("df_id", style="cyan", no_wrap=True)
+        table.add_column("df_description")
+        table.add_column("score", style="dim")
+
+        for row in df.iter_rows(named=True):
+            table.add_row(row["df_id"], row["df_description"] or "", f"{row['score']:.3f}")
+
+        console.print(table)
+        return
+
     from . import search_dataset
     try:
         df = search_dataset(keyword)
@@ -138,6 +164,17 @@ def values(
         table.add_row(row["id"] or "", row["name"] or "")
 
     console.print(table)
+
+
+@app.command()
+def embed():
+    """Build semantic embeddings cache for the dataset catalog."""
+    from .embed import build_embeddings
+    try:
+        build_embeddings(progress=True)
+    except Exception as e:
+        err_console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
 
 
 @app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
@@ -258,6 +295,153 @@ def plot(
 
     p.save(str(out), dpi=150, width=width, height=height)
     console.print(f"[green]Saved:[/green] {out}")
+
+
+@app.command()
+def wizard():
+    """Interactive wizard to discover, explore and download ISTAT datasets."""
+    import questionary
+    from .base import get_agency_id, get_base_url
+    from .discovery import get_dimension_values, istat_dataset
+    from .embed import semantic_search
+
+    # Step 1: query
+    query = questionary.text("Search query (in any language):").ask()
+    if not query:
+        raise typer.Exit(0)
+
+    # Step 2: paginated dataset selection
+    page = 0
+    page_size = 10
+    df_results = None
+    selected_id = None
+
+    while True:
+        if df_results is None:
+            try:
+                df_results = semantic_search(query, n=100)
+            except FileNotFoundError:
+                err_console.print("[red]Embeddings cache not found. Run: istatpy embed[/red]")
+                raise typer.Exit(1)
+
+        slice_ = df_results.slice(page * page_size, page_size)
+        if slice_.is_empty():
+            page = max(0, page - 1)
+            continue
+
+        total = len(df_results)
+        choices = [
+            questionary.Choice(
+                title=f"{row['df_id']:<40} {row['df_description'] or ''}  ({row['score']:.3f})",
+                value=row["df_id"],
+            )
+            for row in slice_.iter_rows(named=True)
+        ]
+        if page > 0:
+            choices.insert(0, questionary.Choice(title="← Previous 10", value="__prev__"))
+        if (page + 1) * page_size < total:
+            shown_end = min((page + 1) * page_size, total)
+            choices.append(questionary.Choice(
+                title=f"→ Next 10  ({page * page_size + 1}–{shown_end} of {total})",
+                value="__next__",
+            ))
+        choices.append(questionary.Choice(title="✕ Cancel", value="__cancel__"))
+
+        answer = questionary.select(
+            f"Select a dataset  (page {page + 1}):", choices=choices
+        ).ask()
+
+        if answer is None or answer == "__cancel__":
+            raise typer.Exit(0)
+        elif answer == "__next__":
+            page += 1
+        elif answer == "__prev__":
+            page -= 1
+        else:
+            selected_id = answer
+            break
+
+    # Step 3: load dataset info (from SQLite cache if available)
+    console.print(f"\n[cyan]Loading dataset[/cyan] [bold]{selected_id}[/bold]...")
+    try:
+        ds = istat_dataset(selected_id)
+    except Exception as e:
+        err_console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+    console.print(Panel(
+        f"ID:          {ds['df_id']}\n"
+        f"Description: {ds['df_description']}\n"
+        f"Structure:   {ds['df_structure_id']}\n"
+        f"Dimensions:  {', '.join(ds['dimensions'].keys())}",
+        title="Dataset",
+        expand=False,
+    ))
+
+    dims = ds["dimensions"]
+    if not dims:
+        err_console.print("[yellow]No dimensions found.[/yellow]")
+        raise typer.Exit(1)
+
+    # Step 4: for each dimension, load values and let user pick (or skip with "all")
+    filters = {}
+    for dim_id, dim_info in dims.items():
+        console.print(f"\n[cyan]Loading values for[/cyan] [bold]{dim_id}[/bold]"
+                      f"[dim]  ({dim_info.get('codelist_id', '')})[/dim]...")
+        try:
+            val_df = get_dimension_values(ds, dim_id)
+        except Exception as e:
+            err_console.print(f"[yellow]Warning:[/yellow] could not load {dim_id}: {e}")
+            continue
+
+        # Auto-select if df_id matches a value in this dimension
+        ids = val_df["id"].to_list()
+        if ds["df_id"] in ids:
+            filters[dim_id] = ds["df_id"]
+            console.print(f"[dim]  → auto-selected {ds['df_id']}[/dim]")
+            continue
+
+        from InquirerPy import inquirer
+        from InquirerPy.base.control import Choice as IChoice
+
+        val_choices = [IChoice(value="", name="(all)  — no filter")] + [
+            IChoice(value=row["id"], name=f"{row['id']}  {row['name'] or ''}")
+            for row in val_df.iter_rows(named=True)
+        ]
+
+        chosen = inquirer.fuzzy(
+            message=f"{dim_id}:",
+            choices=val_choices,
+            default=None,
+            max_height="40%",
+            instruction="(type to filter · ↑↓ navigate · PgUp/PgDn scroll · Enter confirm)",
+        ).execute()
+
+        if chosen is None:
+            raise typer.Exit(0)
+        if chosen:
+            filters[dim_id] = chosen
+
+    # Step 5: build SDMX URL
+    key_parts = [filters.get(dim_id, "") for dim_id in dims]
+    key = ".".join(key_parts)
+
+    base = get_base_url()
+    agency = get_agency_id()
+    version = ds["version"]
+    url = f"{base}/data/{agency},{ds['df_id']},{version}/{key}?format=csv"
+
+    active = {k: v for k, v in filters.items() if v}
+    filter_summary = "\n".join(f"  {k} = {v}" for k, v in active.items()) if active else "  (none — full dataset)"
+
+    console.print(Panel(
+        f"[bold]Dataset:[/bold]\n  {ds['df_id']}  {ds['df_description']}\n\n"
+        f"[bold]Filters:[/bold]\n{filter_summary}\n\n"
+        f"[bold]URL:[/bold]\n{url}\n\n"
+        f"[bold]Download:[/bold]\ncurl -s \"{url}\" -o data.csv",
+        title="Download",
+        expand=False,
+    ))
 
 
 def main():
