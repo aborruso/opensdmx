@@ -1,0 +1,718 @@
+"""CLI for opensdmx — SDMX 2.1 REST API client."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+from typing import Optional
+
+_HELP_FLAGS = {"--help", "-h"}
+
+import httpx
+import typer
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
+from .base import get_base_url, get_provider
+
+app = typer.Typer(help="opensdmx — SDMX 2.1 REST API CLI")
+console = Console()
+err_console = Console(stderr=True)
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        from importlib.metadata import version
+        console.print(version("opensdmx"))
+        raise typer.Exit()
+
+_PROVIDER_HELP = "Provider name ('eurostat', 'istat') or custom base URL"
+
+
+def _apply_provider(provider: str | None) -> None:
+    """Call set_provider if a provider option was given."""
+    if provider:
+        from .base import set_provider
+        set_provider(provider)
+
+
+def _check_api_reachable() -> None:
+    """Do a lightweight GET check on the active provider's base URL."""
+    from .base import _rate_limit_file
+    if _rate_limit_file().exists():
+        return
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            client.get(get_base_url())
+    except Exception:
+        provider_name = get_provider().get("agency_id", "API")
+        err_console.print(
+            f"[red]⚠ {provider_name} API unreachable.[/red] "
+            "Check your network connection or provider URL."
+        )
+        raise typer.Exit(1)
+
+
+@app.callback(invoke_without_command=True)
+def _startup(
+    ctx: typer.Context,
+    version: bool = typer.Option(False, "--version", "-V", callback=_version_callback, is_eager=True, help="Show version and exit"),
+) -> None:
+    if ctx.invoked_subcommand is not None and not _HELP_FLAGS.intersection(sys.argv):
+        _check_api_reachable()
+
+
+@app.command()
+def search(
+    keyword: str = typer.Argument(..., help="Keyword to search in dataset descriptions"),
+    semantic: bool = typer.Option(False, "--semantic", "-s", help="Use semantic search via Ollama embeddings"),
+    n: int = typer.Option(10, "--n", help="Number of results (semantic mode only)"),
+    no_expand: bool = typer.Option(False, "--no-expand", help="Disable query expansion (semantic mode only)"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show expanded query (semantic mode only)"),
+    provider: Optional[str] = typer.Option(None, "--provider", "-p", help=_PROVIDER_HELP),
+):
+    """Search datasets by keyword (or semantically with --semantic)."""
+    _apply_provider(provider)
+
+    if semantic:
+        from .embed import semantic_search
+        try:
+            df = semantic_search(keyword, n=n, expand=not no_expand, verbose=verbose)
+        except FileNotFoundError:
+            import questionary as _q
+            build_now = _q.confirm(
+                "Embeddings cache not found. Build it now? (requires Ollama)"
+            ).ask()
+            if not build_now:
+                raise typer.Exit(1)
+            from .embed import build_embeddings
+            build_embeddings(progress=True)
+            df = semantic_search(keyword, n=n, expand=not no_expand, verbose=verbose)
+        except Exception as e:
+            err_console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
+
+        table = Table(title=f"Semantic search: {keyword}", show_lines=False)
+        table.add_column("df_id", style="cyan", no_wrap=True)
+        table.add_column("df_description")
+        table.add_column("score", style="dim")
+
+        for row in df.iter_rows(named=True):
+            table.add_row(row["df_id"], row["df_description"] or "", f"{row['score']:.3f}")
+
+        console.print(table)
+        return
+
+    from . import search_dataset
+    try:
+        with console.status("[dim]Searching...[/dim]"):
+            df = search_dataset(keyword)
+    except Exception as e:
+        err_console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+    if df.is_empty():
+        err_console.print(f"[yellow]No datasets found for:[/yellow] {keyword}")
+        raise typer.Exit(1)
+
+    table = Table(title=f"Search: {keyword}", show_lines=False)
+    table.add_column("df_id", style="cyan", no_wrap=True)
+    table.add_column("df_description")
+
+    for row in df.iter_rows(named=True):
+        table.add_row(row["df_id"], row["df_description"] or "")
+
+    console.print(table)
+
+
+@app.command()
+def info(
+    dataset_id: str = typer.Argument(..., help="Dataset ID"),
+    provider: Optional[str] = typer.Option(None, "--provider", "-p", help=_PROVIDER_HELP),
+):
+    """Show metadata and dimensions for a dataset."""
+    _apply_provider(provider)
+    from . import dimensions_info, load_dataset
+    try:
+        with console.status("[dim]Loading dataset...[/dim]"):
+            ds = load_dataset(dataset_id)
+    except Exception as e:
+        err_console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+    meta = (
+        f"ID:          {ds['df_id']}\n"
+        f"Version:     {ds['version']}\n"
+        f"Description: {ds['df_description']}\n"
+        f"Structure:   {ds['df_structure_id']}"
+    )
+    console.print(Panel(meta, title="Dataset Info", expand=False))
+
+    try:
+        dim_df = dimensions_info(ds)
+    except Exception as e:
+        err_console.print(f"[yellow]Warning:[/yellow] could not fetch dimension info: {e}")
+        return
+
+    if dim_df.is_empty():
+        console.print("[yellow]No dimensions found.[/yellow]")
+        return
+
+    table = Table(title="Dimensions", show_lines=False)
+    table.add_column("dimension_id", style="cyan", no_wrap=True)
+    table.add_column("position")
+    table.add_column("codelist_id")
+    table.add_column("description")
+
+    for row in dim_df.iter_rows(named=True):
+        table.add_row(
+            row["dimension_id"],
+            str(row["position"]) if row["position"] is not None else "",
+            row["codelist_id"] or "",
+            row.get("description") or "",
+        )
+
+    console.print(table)
+
+
+@app.command()
+def values(
+    dataset_id: str = typer.Argument(..., help="Dataset ID"),
+    dim: str = typer.Argument(..., help="Dimension ID (e.g. FREQ)"),
+    provider: Optional[str] = typer.Option(None, "--provider", "-p", help=_PROVIDER_HELP),
+):
+    """Show available values for a dimension."""
+    _apply_provider(provider)
+    from . import get_dimension_values, load_dataset
+    try:
+        with console.status("[dim]Loading...[/dim]"):
+            ds = load_dataset(dataset_id)
+            val_df = get_dimension_values(ds, dim)
+    except Exception as e:
+        err_console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+    if val_df.is_empty():
+        err_console.print(f"[yellow]No values found for dimension:[/yellow] {dim}")
+        raise typer.Exit(1)
+
+    table = Table(title=f"{dataset_id} / {dim}", show_lines=False)
+    table.add_column("id", style="cyan", no_wrap=True)
+    table.add_column("name")
+
+    for row in val_df.iter_rows(named=True):
+        table.add_row(row["id"] or "", row["name"] or "")
+
+    console.print(table)
+
+
+@app.command()
+def embed(
+    provider: Optional[str] = typer.Option(None, "--provider", "-p", help=_PROVIDER_HELP),
+):
+    """Build semantic embeddings cache for the dataset catalog."""
+    _apply_provider(provider)
+    from .embed import build_embeddings
+    try:
+        build_embeddings(progress=True)
+    except Exception as e:
+        err_console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+
+@app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+def get(
+    ctx: typer.Context,
+    dataset_id: str = typer.Argument(..., help="Dataset ID"),
+    out: Optional[Path] = typer.Option(None, "--out", help="Output file (.csv/.parquet/.json)"),
+    start_period: Optional[str] = typer.Option(None, "--start-period", help="Start period (e.g. 2020, 2020-Q1, 2020-01)"),
+    end_period: Optional[str] = typer.Option(None, "--end-period", help="End period (e.g. 2023, 2023-Q4, 2023-12)"),
+    last_n: Optional[int] = typer.Option(None, "--last-n", help="Return only last N observations per series"),
+    first_n: Optional[int] = typer.Option(None, "--first-n", help="Return only first N observations per series"),
+    provider: Optional[str] = typer.Option(None, "--provider", "-p", help=_PROVIDER_HELP),
+):
+    """Get data for a dataset. Extra --DIM VALUE pairs are used as filters."""
+    _apply_provider(provider)
+    from . import get_data, load_dataset, set_filters
+
+    # Parse extra args as --KEY VALUE pairs (dimension filters)
+    extra = ctx.args
+    filters = {}
+    i = 0
+    while i < len(extra):
+        arg = extra[i]
+        if arg.startswith("--") and i + 1 < len(extra):
+            key = arg[2:]
+            filters[key] = extra[i + 1]
+            i += 2
+        else:
+            err_console.print(f"[red]Unexpected argument:[/red] {arg}")
+            raise typer.Exit(1)
+
+    try:
+        with console.status("[dim]Fetching data...[/dim]"):
+            ds = load_dataset(dataset_id)
+            if filters:
+                ds = set_filters(ds, **filters)
+            df = get_data(ds, start_period=start_period, end_period=end_period,
+                          last_n_observations=last_n, first_n_observations=first_n)
+    except Exception as e:
+        err_console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+    if out is None:
+        sys.stdout.write(df.write_csv())
+    else:
+        suffix = out.suffix.lower()
+        if suffix == ".parquet":
+            df.write_parquet(out)
+        elif suffix == ".json":
+            df.write_ndjson(out)
+        else:
+            df.write_csv(out)
+        console.print(f"[green]Saved:[/green] {out}")
+
+
+@app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
+def plot(
+    ctx: typer.Context,
+    dataset_id: str = typer.Argument(..., help="Dataset ID"),
+    x: str = typer.Option("TIME_PERIOD", "--x", help="Column for X axis"),
+    y: str = typer.Option("OBS_VALUE", "--y", help="Column for Y axis"),
+    color: Optional[str] = typer.Option(None, "--color", help="Column for color grouping"),
+    title: Optional[str] = typer.Option(None, "--title", help="Chart title (default: dataset description)"),
+    xlabel: Optional[str] = typer.Option(None, "--xlabel", help="X axis label (default: column name)"),
+    ylabel: Optional[str] = typer.Option(None, "--ylabel", help="Y axis label (default: column name)"),
+    out: Path = typer.Option(Path("chart.png"), "--out", help="Output file (.png/.pdf/.svg)"),
+    width: float = typer.Option(10.0, "--width", help="Chart width in inches"),
+    height: float = typer.Option(5.0, "--height", help="Chart height in inches"),
+    start_period: Optional[str] = typer.Option(None, "--start-period", help="Start period (e.g. 2020, 2020-Q1, 2020-01)"),
+    end_period: Optional[str] = typer.Option(None, "--end-period", help="End period (e.g. 2023, 2023-Q4, 2023-12)"),
+    provider: Optional[str] = typer.Option(None, "--provider", "-p", help=_PROVIDER_HELP),
+):
+    """Plot data for a dataset as a line chart. Extra --DIM VALUE pairs are used as filters."""
+    _apply_provider(provider)
+    from plotnine import aes, geom_line, geom_point, ggplot, labs, scale_x_date, theme_minimal
+
+    import polars as pl
+
+    from . import get_data, load_dataset, set_filters
+
+    extra = ctx.args
+    filters = {}
+    i = 0
+    while i < len(extra):
+        arg = extra[i]
+        if arg.startswith("--") and i + 1 < len(extra):
+            key = arg[2:]
+            filters[key] = extra[i + 1]
+            i += 2
+        else:
+            err_console.print(f"[red]Unexpected argument:[/red] {arg}")
+            raise typer.Exit(1)
+
+    try:
+        ds = load_dataset(dataset_id)
+        if filters:
+            ds = set_filters(ds, **filters)
+        df = get_data(ds, start_period=start_period, end_period=end_period)
+    except Exception as e:
+        err_console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+    if x not in df.columns or y not in df.columns:
+        err_console.print(f"[red]Error:[/red] columns '{x}' or '{y}' not found in data.")
+        err_console.print(f"Available columns: {', '.join(df.columns)}")
+        raise typer.Exit(1)
+
+    df = df.with_columns(pl.col(y).cast(pl.Float64, strict=False))
+    pdf = df.to_pandas()
+
+    aes_mapping = aes(x=x, y=y, color=color) if color else aes(x=x, y=y)
+    p = (
+        ggplot(pdf, aes_mapping)
+        + geom_line(size=1)
+        + geom_point(size=1.5)
+        + labs(
+            title=title or ds["df_description"],
+            x=xlabel or x,
+            y=ylabel or y,
+        )
+        + theme_minimal()
+    )
+
+    if hasattr(pdf[x], "dt"):
+        p = p + scale_x_date(date_breaks="2 years", date_labels="%Y")
+
+    p.save(str(out), dpi=150, width=width, height=height)
+    console.print(f"[green]Saved:[/green] {out}")
+
+
+@app.command()
+def guide(
+    query: Optional[str] = typer.Argument(None, help="Goal in natural language"),
+    provider: Optional[str] = typer.Option(None, "--provider", "-p", help=_PROVIDER_HELP),
+):
+    """Guided dataset discovery: semantic search + AI multi-turn conversation for filters."""
+    _apply_provider(provider)
+    import questionary
+
+    from .ai import guide_session
+    from .base import get_agency_id, get_base_url
+    from .discovery import load_dataset, set_filters
+    from .embed import semantic_search
+    from .utils import make_url_key
+
+    # Step 1: get query
+    if not query:
+        query = questionary.text("What do you want to analyze? (any language):").ask()
+        if not query:
+            raise typer.Exit(0)
+
+    import httpx as _httpx
+
+    page = 0
+    page_size = 10
+    df_results = None
+    _reuse_ds = False
+
+    while True:
+
+        if not _reuse_ds:
+            selected_id = None
+            while True:
+                if df_results is None:
+                    try:
+                        df_results = semantic_search(query, n=100)
+                    except FileNotFoundError:
+                        build_now = questionary.confirm(
+                            "Embeddings cache not found. Build it now? (requires Ollama)"
+                        ).ask()
+                        if not build_now:
+                            raise typer.Exit(1)
+                        from .embed import build_embeddings
+                        build_embeddings(progress=True)
+                        df_results = semantic_search(query, n=100)
+
+                slice_ = df_results.slice(page * page_size, page_size)
+                if slice_.is_empty():
+                    page = max(0, page - 1)
+                    continue
+
+                total = len(df_results)
+                choices = [
+                    questionary.Choice(
+                        title=(
+                            f"{row['df_id']:<40} "
+                            f"{row['df_description'] or ''}"
+                            + (f"  [{row['df_structure_id']}]" if row.get('df_structure_id') else "")
+                            + f"  ({row['score']:.3f})"
+                        ),
+                        value=row["df_id"],
+                    )
+                    for row in slice_.iter_rows(named=True)
+                ]
+                if page > 0:
+                    choices.insert(0, questionary.Choice(title="← Previous 10", value="__prev__"))
+                if (page + 1) * page_size < total:
+                    shown_end = min((page + 1) * page_size, total)
+                    choices.append(questionary.Choice(
+                        title=f"→ Next 10  ({page * page_size + 1}–{shown_end} of {total})",
+                        value="__next__",
+                    ))
+                choices.append(questionary.Choice(title="✕ Cancel", value="__cancel__"))
+
+                answer = questionary.select(
+                    f"Select a dataset  (page {page + 1}):",
+                    choices=choices,
+                    style=questionary.Style([("highlighted", "bold underline")]),
+                ).ask()
+
+                if answer is None or answer == "__cancel__":
+                    raise typer.Exit(0)
+                elif answer == "__next__":
+                    page += 1
+                elif answer == "__prev__":
+                    page -= 1
+                else:
+                    selected_id = answer
+                    break
+
+            console.print(f"\n[cyan]Loading dataset[/cyan] [bold]{selected_id}[/bold]...")
+            try:
+                ds = load_dataset(selected_id)
+            except Exception as e:
+                err_console.print(f"[red]Error:[/red] {e}")
+                raise typer.Exit(1)
+
+            console.print(Panel(
+                f"ID:          {ds['df_id']}\n"
+                f"Description: {ds['df_description']}\n"
+                f"Structure:   {ds['df_structure_id']}\n"
+                f"Dimensions:  {', '.join(ds['dimensions'].keys())}",
+                title="Dataset",
+                expand=False,
+            ))
+
+            confirm = questionary.select(
+                "Continue with this dataset?",
+                choices=[
+                    questionary.Choice("Yes, continue", value="yes"),
+                    questionary.Choice("No, go back to selection", value="back"),
+                    questionary.Choice("Exit", value="no"),
+                ],
+            ).ask()
+
+            if confirm is None or confirm == "no":
+                raise typer.Exit(0)
+            if confirm == "back":
+                continue
+
+            from .db_cache import save_invalid_dataset
+
+            _check_url = f"{get_base_url()}/dataflow/{get_agency_id()}/{ds['df_id']}"
+            _available = True
+            try:
+                _resp = _httpx.get(_check_url, timeout=10.0)
+                if _resp.status_code >= 400:
+                    _available = False
+            except Exception:
+                _available = False
+
+            if not _available:
+                console.print(
+                    f"\n[yellow]⚠ Dataflow [bold]{ds['df_id']}[/bold] "
+                    "is not available via API. It will be excluded from future searches.[/yellow]"
+                )
+                save_invalid_dataset(ds["df_id"], ds.get("df_description"))
+                df_results = df_results.filter(df_results["df_id"] != ds["df_id"])
+                continue
+
+        else:
+            _reuse_ds = False
+
+        try:
+            result = guide_session(ds, query)
+        except SystemExit:
+            raise typer.Exit(0)
+        except Exception as e:
+            import traceback
+            err_console.print(f"[red]Error:[/red] {e}")
+            err_console.print(traceback.format_exc())
+            raise typer.Exit(1)
+
+        from .discovery import get_available_values
+
+        filters = result["filters"]
+        active = {}
+        for k, v in filters.items():
+            codes = v if isinstance(v, list) else ([v] if v else [])
+            codes = [c for c in codes if c]
+            if codes:
+                active[k] = codes[0] if len(codes) == 1 else codes
+
+        try:
+            avail = {dim_id: set(df["id"].to_list()) for dim_id, df in get_available_values(ds).items()}
+        except Exception:
+            avail = {}
+
+        if avail:
+            invalid = []
+            for dim_id, codes in active.items():
+                codes_list = codes if isinstance(codes, list) else [codes]
+                if dim_id in avail:
+                    bad = [c for c in codes_list if c not in avail[dim_id]]
+                    if bad:
+                        invalid.append((dim_id, bad, sorted(avail[dim_id])))
+            if invalid:
+                console.print("\n[yellow]⚠ Codes not present in dataset:[/yellow]")
+                correction_notes = []
+                for dim_id, bad_codes, valid_codes in invalid:
+                    console.print(f"  {dim_id} = [red]{', '.join(bad_codes)}[/red]")
+                    console.print(f"  Available values: [green]{', '.join(valid_codes[:20])}[/green]")
+                    correction_notes.append(
+                        f"{dim_id}: codes {bad_codes} do not exist, use one of: {valid_codes[:20]}"
+                    )
+                confirm_invalid = questionary.select(
+                    "What would you like to do?",
+                    choices=[
+                        questionary.Choice("Ask AI to fix the codes", value="ai_fix"),
+                        questionary.Choice("Use these filters anyway", value="yes"),
+                        questionary.Choice("Exit", value="no"),
+                    ],
+                ).ask()
+                if confirm_invalid is None or confirm_invalid == "no":
+                    raise typer.Exit(0)
+                if confirm_invalid == "ai_fix":
+                    notes = "; ".join(correction_notes)
+                    query = (
+                        f"{query}\n\n"
+                        f"CORRECTION NEEDED: {notes}. "
+                        "Use ONLY the listed available codes."
+                    )
+                    _reuse_ds = True
+                    continue
+
+        try:
+            ds = set_filters(ds, **active)
+        except Exception as e:
+            err_console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
+
+        key = make_url_key(ds["filters"])
+        base, agency, version = get_base_url(), get_agency_id(), ds["version"]
+        url = f"{base}/data/{agency},{ds['df_id']},{version}/{key}?format=csv"
+
+        _sample_ok = True
+        try:
+            _sresp = _httpx.get(
+                url.replace("?format=csv", "?format=csv&lastNObservations=1"),
+                timeout=30.0,
+                headers={"Accept": "text/csv"},
+            )
+            if _sresp.status_code >= 400 or "Error" in _sresp.text[:200]:
+                _sample_ok = False
+        except Exception:
+            _sample_ok = False
+
+        if not _sample_ok:
+            console.print(
+                "\n[yellow]⚠ Filter combination does not return data.[/yellow] "
+                "Some values may not be available for the chosen area or period."
+            )
+            confirm_combo = questionary.select(
+                "What would you like to do?",
+                choices=[
+                    questionary.Choice("Ask AI to verify and propose an alternative", value="ai_fix"),
+                    questionary.Choice("Show the URL anyway", value="yes"),
+                    questionary.Choice("Exit", value="no"),
+                ],
+            ).ask()
+            if confirm_combo is None or confirm_combo == "no":
+                raise typer.Exit(0)
+            if confirm_combo == "ai_fix":
+                failed_filters = ", ".join(f"{k}={v}" for k, v in active.items())
+                query = (
+                    f"{query}\n\n"
+                    f"NOTE: previous combination ({failed_filters}) returned no data. "
+                    "Verify with test_filter_combination and propose a working combination."
+                )
+                _reuse_ds = True
+                continue
+
+        filter_summary = "\n".join(f"  {k} = {v}" for k, v in active.items()) or "  (none)"
+
+        cli_args = " ".join(
+            f"--{k} {'+'.join(v) if isinstance(v, list) else v}"
+            for k, v in active.items()
+        )
+        cli_cmd = f"opensdmx get {ds['df_id']} {cli_args} --out data.csv".strip()
+
+        console.print(Panel(
+            f"[bold]Dataset:[/bold]\n  {ds['df_id']}  {ds['df_description']}\n\n"
+            f"[bold]Filters:[/bold]\n{filter_summary}\n\n"
+            f"[bold]Reason:[/bold]\n  {result['reasoning']}\n\n"
+            f"[bold]URL:[/bold]\n{url}\n\n"
+            f"[bold]Download:[/bold]\ncurl -s \"{url}\" -o data.csv\n\n"
+            f"[bold]CLI:[/bold]\n{cli_cmd}",
+            title="Result",
+            expand=False,
+        ))
+
+        while True:
+            post_action = questionary.select(
+                "What would you like to do?",
+                choices=[
+                    questionary.Choice("Download file to current directory", value="download"),
+                    questionary.Choice("Modify filters (back to AI with same dataset)", value="modify"),
+                    questionary.Choice("New search (new dataset)", value="new"),
+                    questionary.Choice("Exit", value="exit"),
+                ],
+            ).ask()
+
+            if post_action is None or post_action == "exit":
+                raise typer.Exit(0)
+
+            elif post_action == "download":
+                out_file = Path("data.csv")
+                if out_file.exists():
+                    overwrite = questionary.confirm(
+                        f"'{out_file.resolve()}' already exists. Overwrite?"
+                    ).ask()
+                    if not overwrite:
+                        console.print("[dim]Download cancelled.[/dim]")
+                        continue
+                console.print("[cyan]Downloading data...[/cyan]")
+                try:
+                    from . import get_data as _get_data
+                    _df = _get_data(ds)
+                    _df.write_csv(str(out_file))
+                    console.print(f"[green]Saved:[/green] {out_file.resolve()}")
+                except Exception as e:
+                    err_console.print(f"[red]Download error:[/red] {e}")
+
+            elif post_action == "modify":
+                mod_input = questionary.text(
+                    "What do you want to change? (e.g. geographic area, period, filter values...):"
+                ).ask()
+                if mod_input:
+                    query = f"{query}\n\nREQUESTED CHANGE: {mod_input}"
+                _reuse_ds = True
+                break
+
+            elif post_action == "new":
+                df_results = None
+                page = 0
+                break
+
+
+@app.command()
+def blacklist(
+    provider: Optional[str] = typer.Option(None, "--provider", "-p", help=_PROVIDER_HELP),
+):
+    """List and manage datasets marked as unavailable."""
+    _apply_provider(provider)
+    import questionary
+    from .db_cache import delete_invalid_dataset, list_invalid_datasets
+
+    entries = list_invalid_datasets()
+    if not entries:
+        console.print("[green]No datasets in the blacklist.[/green]")
+        return
+
+    table = Table(title="Blacklisted datasets", show_lines=False)
+    table.add_column("df_id", style="cyan", no_wrap=True)
+    table.add_column("Description")
+    table.add_column("Added on", style="dim", no_wrap=True)
+
+    import datetime
+    for e in entries:
+        date_str = datetime.datetime.fromtimestamp(e["marked_at"]).strftime("%Y-%m-%d %H:%M")
+        table.add_row(e["df_id"], e["description"] or "", date_str)
+
+    console.print(table)
+
+    choices = [
+        questionary.Choice(
+            title=f"{e['df_id']}  {e['description'] or ''}",
+            value=e["df_id"],
+        )
+        for e in entries
+    ]
+    to_remove = questionary.checkbox(
+        "Select datasets to remove from blacklist:",
+        choices=choices,
+    ).ask()
+
+    if not to_remove:
+        console.print("[dim]No changes.[/dim]")
+        return
+
+    for df_id in to_remove:
+        delete_invalid_dataset(df_id)
+        console.print(f"[green]Removed:[/green] {df_id}")
+
+
+def main():
+    app()
