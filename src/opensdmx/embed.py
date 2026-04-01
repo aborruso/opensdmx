@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
-
 import numpy as np
 import polars as pl
 
-_EMBED_CACHE = Path(tempfile.gettempdir()) / "istatpy_embeddings.parquet"
+from .base import get_cache_dir
+
 _EMBED_MODEL = "nomic-embed-text-v2-moe"
+
+
+def _embed_cache_path():
+    return get_cache_dir() / "embeddings.parquet"
 
 
 def _embed(texts: list[str]) -> np.ndarray:
@@ -21,49 +23,87 @@ def _embed(texts: list[str]) -> np.ndarray:
 
 
 def build_embeddings(progress: bool = True) -> None:
-    """Encode all catalog descriptions and save to /tmp/istatpy_embeddings.parquet."""
+    """Encode all catalog descriptions and save to the provider's cache directory."""
     from .discovery import all_available
 
     catalog = all_available()
+    if catalog.is_empty():
+        raise RuntimeError("No datasets found. Check your provider or network connection.")
+
     ids = catalog["df_id"].to_list()
-    descriptions = catalog["df_description"].fill_null("").to_list()
+    texts = catalog["df_description"].fill_null("").to_list()
 
     if progress:
-        print(f"Embedding {len(descriptions)} descriptions with {_EMBED_MODEL}...")
+        print(f"Embedding {len(texts)} descriptions with {_EMBED_MODEL}...")
 
-    vectors = _embed(descriptions)
+    vectors = _embed(texts)
+    cache_path = _embed_cache_path()
 
     rows = [
         {"df_id": df_id, "embedding": vec.tolist()}
         for df_id, vec in zip(ids, vectors)
     ]
     df = pl.DataFrame(rows, schema={"df_id": pl.Utf8, "embedding": pl.List(pl.Float32)})
-    df.write_parquet(_EMBED_CACHE)
+    df.write_parquet(cache_path)
 
     if progress:
-        print(f"Saved: {_EMBED_CACHE} ({len(rows)} rows, dim={vectors.shape[1]})")
+        dim = vectors.shape[1] if vectors.ndim > 1 else 0
+        print(f"Saved: {cache_path} ({len(rows)} rows, dim={dim})")
 
 
-def semantic_search(query: str, n: int = 10) -> pl.DataFrame:
+def _expand_query(query: str) -> str:
+    """Expand query with synonyms and related terms via LLM, in the provider's catalog language."""
+    import io
+    import sys
+    from chatlas import ChatGoogle
+    from .base import get_provider
+    lang = get_provider().get("language", "en")
+    chat = ChatGoogle(model="gemini-2.5-flash")
+    _old_stdout = sys.stdout
+    sys.stdout = io.StringIO()
+    try:
+        response = chat.chat(
+            f"Expand this search query for a statistical dataset catalog. "
+            f"Translate to {lang} if needed, then add 3-5 relevant synonyms or related terms. "
+            f"Return only the expanded query as a single line of keywords, no explanation.\n\n"
+            f"Query: {query}"
+        )
+    finally:
+        sys.stdout = _old_stdout
+    return str(response).strip()
+
+
+def semantic_search(query: str, n: int = 10, expand: bool = True, verbose: bool = False) -> pl.DataFrame:
     """Return top-N datasets by semantic similarity to query."""
     from .discovery import all_available
 
-    if not _EMBED_CACHE.exists():
+    cache_path = _embed_cache_path()
+    if not cache_path.exists():
         raise FileNotFoundError(
-            "Embeddings cache not found. Run: istatpy embed"
+            "Embeddings cache not found. Run: opensdmx embed"
         )
 
-    embed_df = pl.read_parquet(_EMBED_CACHE)
+    embed_df = pl.read_parquet(cache_path)
+    if embed_df.is_empty():
+        cache_path.unlink(missing_ok=True)
+        raise FileNotFoundError(
+            "Embeddings cache is empty (corrupted). Run: opensdmx embed"
+        )
     doc_vecs = np.array(embed_df["embedding"].to_list(), dtype=np.float32)
 
-    query_vec = _embed([query])[0]
+    expanded = _expand_query(query) if expand else query
+    if verbose and expand:
+        import sys
+        print(f"[expanded query] {expanded}", file=sys.stderr)
+    query_vec = _embed([expanded])[0]
 
     # Cosine similarity
     query_norm = query_vec / (np.linalg.norm(query_vec) + 1e-10)
     doc_norms = doc_vecs / (np.linalg.norm(doc_vecs, axis=1, keepdims=True) + 1e-10)
     scores = doc_norms @ query_norm
 
-    top_idx = np.argsort(scores)[::-1][:n]
+    # Request more candidates to compensate for filtered-out invalid datasets
+    top_idx = np.argsort(scores)[::-1][:n * 2]
 
     catalog = all_available()
     catalog_map = {
@@ -71,12 +111,20 @@ def semantic_search(query: str, n: int = 10) -> pl.DataFrame:
         for row in catalog.iter_rows(named=True)
     }
 
-    results = [
-        {
-            "df_id": embed_df["df_id"][int(i)],
-            "df_description": catalog_map.get(embed_df["df_id"][int(i)], ""),
+    results = []
+    for i in top_idx:
+        df_id = embed_df["df_id"][int(i)]
+        if df_id not in catalog_map:
+            continue  # skip invalid or removed datasets
+        results.append({
+            "df_id": df_id,
+            "df_description": catalog_map[df_id],
             "score": float(scores[i]),
-        }
-        for i in top_idx
-    ]
-    return pl.DataFrame(results, schema={"df_id": pl.Utf8, "df_description": pl.Utf8, "score": pl.Float32})
+        })
+        if len(results) == n:
+            break
+    return pl.DataFrame(results, schema={
+        "df_id": pl.Utf8,
+        "df_description": pl.Utf8,
+        "score": pl.Float32,
+    })

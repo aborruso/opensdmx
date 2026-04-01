@@ -1,51 +1,67 @@
-"""Functions for discovering and exploring ISTAT datasets."""
+"""Functions for discovering and exploring SDMX datasets."""
 
 from __future__ import annotations
 
-import tempfile
 import time
 import warnings
-from pathlib import Path
 
 import polars as pl
 
-from .base import get_agency_id, istat_request_xml
+from .base import get_agency_id, get_cache_dir, get_provider, sdmx_request_xml
 from .utils import get_name_by_lang, xml_attr_safe, xml_parse
 
-_DATAFLOW_CACHE = Path(tempfile.gettempdir()) / "istatpy_dataflows.parquet"
 _CACHE_TTL = 86400.0  # 24 hours
+
+
+def _dataflow_cache_path():
+    return get_cache_dir() / "dataflows.parquet"
 
 
 def _load_cached_dataflows() -> pl.DataFrame | None:
     """Return cached dataflow list if it exists and is < 24h old."""
-    if _DATAFLOW_CACHE.exists():
-        age = time.time() - _DATAFLOW_CACHE.stat().st_mtime
+    path = _dataflow_cache_path()
+    if path.exists():
+        age = time.time() - path.stat().st_mtime
         if age < _CACHE_TTL:
-            return pl.read_parquet(_DATAFLOW_CACHE)
+            return pl.read_parquet(path)
     return None
 
 
+def _filter_invalid(df: pl.DataFrame) -> pl.DataFrame:
+    """Remove datasets marked as invalid from the given DataFrame."""
+    from .db_cache import get_invalid_dataset_ids
+    invalid = get_invalid_dataset_ids()
+    if invalid:
+        df = df.filter(~pl.col("df_id").is_in(list(invalid)))
+    return df
+
+
 def all_available() -> pl.DataFrame:
-    """List all available ISTAT datasets.
+    """List all available datasets for the active provider.
 
     Returns a Polars DataFrame with columns:
         df_id, version, df_description, df_structure_id
 
-    Results are cached in /tmp/istatpy_dataflows.parquet for 24h.
+    Results are cached per provider for 24h.
+    Invalid datasets (marked via guide) are excluded.
     """
     cached = _load_cached_dataflows()
     if cached is not None:
-        return cached
+        return _filter_invalid(cached)
 
-    path = f"dataflow/{get_agency_id()}"
-    content = istat_request_xml(path)
+    agency_id = get_agency_id()
+    language = get_provider()["language"]
+
+    path = f"dataflow/{agency_id}"
+    dataflow_params = get_provider().get("dataflow_params", {})
+    content = sdmx_request_xml(path, **dataflow_params)
     root, ns = xml_parse(content)
 
     records = []
     for df in root.iter("{" + ns.get("structure", "") + "}Dataflow") if "structure" in ns else []:
         df_id = xml_attr_safe(df, "id")
         version = xml_attr_safe(df, "version")
-        df_description = get_name_by_lang(df, "en", ns)
+        df_description = get_name_by_lang(df, language, ns) or get_name_by_lang(df, "en", ns)
 
         # Structure reference
         struct_ns = ns.get("structure", "")
@@ -66,10 +82,10 @@ def all_available() -> pl.DataFrame:
         "df_structure_id": pl.Utf8,
     })
     try:
-        df.write_parquet(_DATAFLOW_CACHE)
+        df.write_parquet(_dataflow_cache_path())
     except OSError:
         pass
-    return df
+    return _filter_invalid(df)
 
 
 def search_dataset(keyword: str) -> pl.DataFrame:
@@ -90,8 +106,9 @@ def _get_dimensions(structure_id: str) -> dict:
     if cached is not None:
         return cached
 
-    path = f"datastructure/ALL/{structure_id}"
-    content = istat_request_xml(path)
+    ds_agency = get_provider().get("datastructure_agency", "ALL")
+    path = f"datastructure/{ds_agency}/{structure_id}"
+    content = sdmx_request_xml(path)
     root, ns = xml_parse(content)
 
     struct_ns = ns.get("structure", "")
@@ -133,7 +150,7 @@ def _get_dimension_description(codelist_id: str | None) -> str | None:
         return get_cached_codelist_info(codelist_id)
     try:
         path = f"codelist/ALL/{codelist_id}"
-        content = istat_request_xml(path)
+        content = sdmx_request_xml(path)
         root, ns = xml_parse(content)
         struct_ns = ns.get("structure", "")
         tag = f"{{{struct_ns}}}Codelist" if struct_ns else "Codelist"
@@ -145,8 +162,8 @@ def _get_dimension_description(codelist_id: str | None) -> str | None:
     return description
 
 
-def istat_dataset(dataflow_identifier: str) -> dict:
-    """Create an ISTAT dataset object for a given dataflow ID, structure ID, or description.
+def load_dataset(dataflow_identifier: str) -> dict:
+    """Create a dataset object for a given dataflow ID, structure ID, or description.
 
     Returns a dict with keys:
         df_id, version, df_description, df_structure_id, dimensions, filters
@@ -175,14 +192,15 @@ def istat_dataset(dataflow_identifier: str) -> dict:
     if match_row is None:
         raise ValueError(f"Could not find dataset with identifier: {dataflow_identifier}")
 
-    dimensions = _get_dimensions(match_row["df_structure_id"])
+    structure_id = match_row["df_structure_id"] or match_row["df_id"]
+    dimensions = _get_dimensions(structure_id)
     filters = {dim_id: "." for dim_id in dimensions}
 
     return {
         "df_id": match_row["df_id"],
         "version": match_row["version"],
         "df_description": match_row["df_description"],
-        "df_structure_id": match_row["df_structure_id"],
+        "df_structure_id": structure_id,
         "dimensions": dimensions,
         "filters": filters,
     }
@@ -190,8 +208,8 @@ def istat_dataset(dataflow_identifier: str) -> dict:
 
 def print_dataset(dataset: dict) -> None:
     """Print a human-readable summary of a dataset object."""
-    print("ISTAT Dataset")
-    print("-------------")
+    print("Dataset")
+    print("-------")
     print(f"ID:          {dataset['df_id']}")
     print(f"Version:     {dataset['version']}")
     print(f"Description: {dataset['df_description']}")
@@ -253,7 +271,7 @@ def get_dimension_values(dataset: dict, dimension_id: str) -> pl.DataFrame:
         return pl.DataFrame(cached, schema={"id": pl.Utf8, "name": pl.Utf8})
 
     path = f"codelist/ALL/{codelist_id}"
-    content = istat_request_xml(path)
+    content = sdmx_request_xml(path)
     root, ns = xml_parse(content)
 
     struct_ns = ns.get("structure", "")
@@ -271,17 +289,31 @@ def get_dimension_values(dataset: dict, dimension_id: str) -> pl.DataFrame:
 
 
 def get_available_values(dataset: dict) -> dict[str, pl.DataFrame]:
-    """Get all available values for all dimensions via availableconstraint endpoint."""
-    path = f"availableconstraint/{dataset['df_id']}"
+    """Get all available values for all dimensions via availableconstraint endpoint.
+
+    Results are cached in SQLite for 7 days.
+    """
+    from .db_cache import get_cached_available_constraints, save_available_constraints
+
+    df_id = dataset["df_id"]
+    cached = get_cached_available_constraints(df_id)
+    if cached is not None:
+        return {dim_id: pl.DataFrame({"id": codes}) for dim_id, codes in cached.items()}
+
+    provider = get_provider()
+    constraint_endpoint = provider.get("constraint_endpoint", "availableconstraint")
+    if constraint_endpoint == "contentconstraint":
+        path = f"{constraint_endpoint}/{provider['agency_id']}/{df_id}"
+    else:
+        path = f"{constraint_endpoint}/{df_id}"
     try:
-        content = istat_request_xml(path, references="all", detail="full")
+        content = sdmx_request_xml(path, references="none")
         root, ns = xml_parse(content)
 
-        struct_ns = ns.get("structure", "")
         common_ns = ns.get("common", "")
+        struct_ns = ns.get("structure", "")
 
-        result = {}
-        # Try structure:KeyValue and common:KeyValue
+        result: dict = {}
         kv_tags = []
         if struct_ns:
             kv_tags.append(f"{{{struct_ns}}}KeyValue")
@@ -293,13 +325,12 @@ def get_available_values(dataset: dict) -> dict[str, pl.DataFrame]:
                 dim_id = kv.get("id")
                 if not dim_id:
                     continue
-                values = []
-                for child in kv:
-                    if child.text:
-                        values.append(child.text.strip())
-                result[dim_id] = pl.DataFrame({"id": values})
+                values = [c.text.strip() for c in kv if c.text and c.text.strip()]
+                if values:
+                    result[dim_id] = values
 
-        return result
+        save_available_constraints(df_id, result)
+        return {dim_id: pl.DataFrame({"id": codes}) for dim_id, codes in result.items()}
 
     except Exception as e:
         warnings.warn(f"Could not retrieve available values: {e}", stacklevel=2)

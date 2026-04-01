@@ -1,0 +1,50 @@
+{
+  "eurostat": {
+    "name": "Eurostat",
+    "base_url": "https://ec.europa.eu/eurostat/api/dissemination/sdmx/2.1",
+    "agency_id": "ESTAT",
+    "rate_limit": 0.5,
+    "language": "en",
+    "dataflow_params": {"detail": "allstubs", "references": "none"},
+    "constraint_endpoint": "contentconstraint",
+    "datastructure_agency": "ESTAT",
+    "data_format_param": "SDMX-CSV"
+  },
+  "istat": {
+    "name": "ISTAT",
+    "base_url": "https://esploradati.istat.it/SDMXWS/rest",
+    "agency_id": "IT1",
+    "rate_limit": 13.0,
+    "language": "it"
+  },
+  "ecb": {
+    "name": "European Central Bank",
+    "base_url": "https://data-api.ecb.europa.eu/service",
+    "agency_id": "ECB"
+  },
+  "oecd": {
+    "name": "OECD",
+    "base_url": "https://sdmx.oecd.org/public/rest",
+    "agency_id": "OECD"
+  },
+  "insee": {
+    "name": "INSEE (France)",
+    "base_url": "https://www.bdm.insee.fr/series/sdmx",
+    "agency_id": "FR1"
+  },
+  "bundesbank": {
+    "name": "Deutsche Bundesbank",
+    "base_url": "https://api.statistiken.bundesbank.de/rest",
+    "agency_id": "BBK"
+  },
+  "worldbank": {
+    "name": "World Bank",
+    "base_url": "https://api.worldbank.org/v2/sdmx/rest",
+    "agency_id": "WB"
+  },
+  "abs": {
+    "name": "Australian Bureau of Statistics",
+    "base_url": "https://data.api.abs.gov.au/rest",
+    "agency_id": "ABS"
+  }
+}

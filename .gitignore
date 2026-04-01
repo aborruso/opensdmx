@@ -8,3 +8,12 @@ wheels/
 
 # Virtual environments
 .venv
+
+# AI tool configs (personal)
+.claude/
+.codex/
+.gemini/
+.opencode/
+
+# Temp data files
+data.csv

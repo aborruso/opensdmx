@@ -1,24 +1,26 @@
-"""istatpy — Python interface to the ISTAT SDMX REST API."""
+"""opensdmx — Python interface to any SDMX 2.1 REST API."""
 
-from .base import istat_timeout
+from .base import get_provider, set_provider, set_timeout
 from .discovery import (
     all_available,
     dimensions_info,
     get_available_values,
     get_dimension_values,
-    istat_dataset,
+    load_dataset,
     print_dataset,
     reset_filters,
     search_dataset,
     set_filters,
 )
-from .retrieval import get_data, istat_get, parse_time_period
+from .retrieval import fetch, get_data, parse_time_period
 from .cli import main
 
 __all__ = [
+    "set_provider",
+    "get_provider",
     "all_available",
     "search_dataset",
-    "istat_dataset",
+    "load_dataset",
     "print_dataset",
     "dimensions_info",
     "get_dimension_values",
@@ -26,7 +28,7 @@ __all__ = [
     "set_filters",
     "reset_filters",
     "get_data",
-    "istat_get",
-    "istat_timeout",
+    "fetch",
+    "set_timeout",
     "parse_time_period",
 ]

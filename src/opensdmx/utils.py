@@ -3,14 +3,25 @@
 from lxml import etree
 
 
+_NS_CANONICAL = {
+    "http://www.sdmx.org/resources/sdmxml/schemas/v2_1/message": "message",
+    "http://www.sdmx.org/resources/sdmxml/schemas/v2_1/structure": "structure",
+    "http://www.sdmx.org/resources/sdmxml/schemas/v2_1/common": "common",
+}
+
+
 def xml_parse(content: bytes):
-    """Parse XML bytes and return (root, namespaces dict)."""
+    """Parse XML bytes and return (root, namespaces dict).
+
+    Namespace prefixes are normalized to canonical names (message, structure, common)
+    regardless of the prefix used in the source XML.
+    """
     root = etree.fromstring(content)
-    # Collect all namespaces from the document
     ns = {}
     for prefix, uri in root.nsmap.items():
         if prefix is not None:
-            ns[prefix] = uri
+            canonical = _NS_CANONICAL.get(uri, prefix)
+            ns[canonical] = uri
     return root, ns
 
 
@@ -57,10 +68,10 @@ def make_url_key(filters: dict) -> str:
 
     parts = []
     for values in filters.values():
-        if values == "." or values == [""]:
-            parts.append(".")
+        if not values or values == "." or values == [""]:
+            parts.append("")  # empty = all values in SDMX key
         elif isinstance(values, (list, tuple)):
-            parts.append("+".join(str(v) for v in values))
+            parts.append("+".join(str(v) for v in values if v))
         else:
             parts.append(str(values))
 

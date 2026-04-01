@@ -1,4 +1,4 @@
-"""Functions for retrieving data from ISTAT datasets."""
+"""Functions for retrieving data from SDMX datasets."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import re
 
 import polars as pl
 
-from .base import istat_request_csv
-from .discovery import istat_dataset, set_filters
+from .base import sdmx_request_csv
+from .discovery import load_dataset, set_filters
 from .utils import make_url_key
 
 
@@ -47,7 +47,6 @@ def parse_time_period(series: pl.Series) -> pl.Series:
         m = re.fullmatch(r"(\d{4})-W(\d{2})", tp)
         if m:
             year, week = int(m.group(1)), int(m.group(2))
-            # Approximate: Jan 1 + (week-1)*7 days
             from datetime import date, timedelta
             d = date(year, 1, 1) + timedelta(weeks=week - 1)
             return d.isoformat()
@@ -67,14 +66,16 @@ def get_data(
     start_period: str | None = None,
     end_period: str | None = None,
     last_n_observations: int | None = None,
+    first_n_observations: int | None = None,
 ) -> pl.DataFrame:
-    """Retrieve data from an ISTAT dataset using the current filters.
+    """Retrieve data from a dataset using the current filters.
 
     Args:
-        dataset: dict returned by istat_dataset()
+        dataset: dict returned by load_dataset()
         start_period: optional start date (YYYY-MM-DD or YYYY)
         end_period: optional end date (YYYY-MM-DD or YYYY)
-        last_n_observations: optional, return only last N observations
+        last_n_observations: optional, return only last N observations per series
+        first_n_observations: optional, return only first N observations per series
 
     Returns:
         Polars DataFrame sorted by TIME_PERIOD ascending
@@ -91,8 +92,10 @@ def get_data(
         params["endPeriod"] = end_period
     if last_n_observations is not None:
         params["lastNObservations"] = last_n_observations
+    if first_n_observations is not None:
+        params["firstNObservations"] = first_n_observations
 
-    data = istat_request_csv(path, **params)
+    data = sdmx_request_csv(path, **params)
 
     if "TIME_PERIOD" in data.columns:
         data = data.with_columns(
@@ -102,27 +105,30 @@ def get_data(
     return data
 
 
-def istat_get(
+def fetch(
     dataflow_id: str,
     start_period: str | None = None,
     end_period: str | None = None,
     last_n_observations: int | None = None,
+    first_n_observations: int | None = None,
     **filters,
 ) -> pl.DataFrame:
-    """Quick one-call retrieval: creates dataset, sets filters, fetches data.
+    """Quick one-call retrieval: loads dataset, sets filters, fetches data.
 
     Args:
-        dataflow_id: ISTAT dataflow ID (e.g. "139_176")
+        dataflow_id: Dataflow ID (e.g. "une_rt_m" for Eurostat, "139_176" for ISTAT)
         start_period: optional start date
         end_period: optional end date
-        last_n_observations: optional, return only last N observations
-        **filters: dimension filters (e.g. FREQ="M", TIPO_DATO="ISAV")
+        last_n_observations: optional, return only last N observations per series
+        first_n_observations: optional, return only first N observations per series
+        **filters: dimension filters (e.g. FREQ="M", geo="IT")
 
     Returns:
         Polars DataFrame
     """
-    ds = istat_dataset(dataflow_id)
+    ds = load_dataset(dataflow_id)
     if filters:
         ds = set_filters(ds, **filters)
     return get_data(ds, start_period=start_period, end_period=end_period,
-                    last_n_observations=last_n_observations)
+                    last_n_observations=last_n_observations,
+                    first_n_observations=first_n_observations)
