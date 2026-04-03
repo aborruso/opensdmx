@@ -114,6 +114,73 @@ Fields not specified in `portals.json` fall back to the defaults listed above (a
 
 ---
 
+## Rate limiting
+
+The `rate_limit` field in `portals.json` sets the minimum number of seconds that must elapse between consecutive HTTP calls to a provider. It is enforced automatically — no configuration is needed at runtime.
+
+### How it works
+
+1. After every successful HTTP response, opensdmx writes the current Unix timestamp to a file in the OS temp directory:
+
+   ```
+   /tmp/opensdmx_{AGENCY_ID}_rate_limit.log
+   ```
+
+   For example: `/tmp/opensdmx_IT1_rate_limit.log` for ISTAT.
+
+2. Before the next HTTP call to the same provider, opensdmx reads the file and computes the elapsed time. If `elapsed < rate_limit`, it sleeps for the remaining seconds, showing a live countdown on stderr:
+
+   ```
+   Waiting (11s)...
+   ```
+
+3. The timestamp is written **after** the HTTP response is received (not before), so the countdown starts from when the previous call completed.
+
+### When it fires
+
+Rate limiting applies only to actual HTTP calls. It does **not** fire on cache hits (SQLite or Parquet). The full call chain is:
+
+```
+CLI command
+  └─ check SQLite / Parquet cache
+       ├─ hit  → return cached data  (no wait, no timestamp update)
+       └─ miss → sdmx_request()
+                   └─ _rate_limit_check()   ← waits if needed
+                        └─ HTTP call
+                             └─ write timestamp to /tmp  ← only on success
+```
+
+### Cross-process behavior
+
+The `/tmp` file persists across separate CLI invocations. Running two commands back-to-back in separate shells will respect the rate limit:
+
+```bash
+opensdmx constraints 151_929 --provider istat   # makes HTTP call, writes /tmp timestamp
+opensdmx info 151_929 --provider istat          # reads /tmp, waits if < 13s have passed
+```
+
+### Cold start
+
+On the first call to a provider (no `/tmp` file), no wait is applied. The file is created after the first successful HTTP response.
+
+### Configuring rate limits
+
+To adjust the interval for a built-in provider, edit `src/opensdmx/portals.json`:
+
+```json
+"istat": {
+  "rate_limit": 13.0
+}
+```
+
+For custom providers, pass `rate_limit` to `set_provider()`:
+
+```python
+opensdmx.set_provider("https://mysdmx.example.org/rest", agency_id="XYZ", rate_limit=5.0)
+```
+
+---
+
 ## Using a custom provider
 
 Any SDMX 2.1-compliant REST endpoint can be used as a custom provider:

@@ -1,6 +1,7 @@
 """Core HTTP client and provider configuration for SDMX 2.1 REST APIs."""
 
 import json
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -108,7 +109,13 @@ def _rate_limit_file() -> Path:
 
 
 def _rate_limit_check() -> None:
-    """Enforce minimum interval between API calls for the active provider."""
+    """Wait if needed to respect the provider's rate limit.
+
+    Reads the last-call timestamp from /tmp. If less than rate_limit seconds
+    have passed since the last HTTP response, sleeps for the remaining time.
+    The timestamp is written *after* the HTTP call completes (in sdmx_request),
+    so the countdown starts from when the response was received.
+    """
     min_interval = get_provider()["rate_limit"]
     rl_file = _rate_limit_file()
     if rl_file.exists():
@@ -123,19 +130,20 @@ def _rate_limit_check() -> None:
                     remaining = end_time - time.time()
                     if remaining <= 0:
                         break
-                    print(f"\r{label} ({remaining:.0f}s)...  ", end="", flush=True)
+                    sys.stderr.write(f"\r{label} ({remaining:.0f}s)...  ")
+                    sys.stderr.flush()
                     time.sleep(0.2)
-                print()
+                sys.stderr.write("\n")
+                sys.stderr.flush()
         except (ValueError, OSError):
             pass
-    rl_file.write_text(str(time.time()))
 
 
 def sdmx_request(path: str, accept: str = "application/xml", **params) -> httpx.Response:
     """Make a request to the active SDMX provider with retry logic."""
     url = f"{get_base_url()}/{path}"
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5, min=0.5, max=4))
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5, min=0.5, max=4), reraise=True)
     def _do_request() -> httpx.Response:
         _rate_limit_check()
         with httpx.Client(timeout=_timeout) as client:
@@ -148,6 +156,7 @@ def sdmx_request(path: str, accept: str = "application/xml", **params) -> httpx.
                 },
             )
             resp.raise_for_status()
+            _rate_limit_file().write_text(str(time.time()))
             return resp
 
     return _do_request()
