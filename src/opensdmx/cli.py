@@ -95,13 +95,14 @@ def search(
     keyword: str = typer.Argument(..., help="Keyword to search in dataset descriptions"),
     semantic: bool = typer.Option(False, "--semantic", "-s", help="Use semantic search via Ollama embeddings"),
     n: int = typer.Option(10, "--n", help="Number of results (semantic mode only)"),
-    no_expand: bool = typer.Option(False, "--no-expand", help="Disable query expansion (semantic mode only)"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show expanded query (semantic mode only)"),
     provider: Optional[str] = typer.Option(None, "--provider", "-p", help=_PROVIDER_HELP),
 ):
     """Search datasets by keyword (or semantically with --semantic).
 
     Default provider: eurostat. Use --provider to switch.
+
+    Tip: semantic search matches meaning, not exact words. Try synonyms
+    or related terms for better results (e.g. "jobless" instead of "unemployment").
 
     Examples:
 
@@ -114,7 +115,7 @@ def search(
     if semantic:
         from .embed import semantic_search
         try:
-            df = semantic_search(keyword, n=n, expand=not no_expand, verbose=verbose)
+            df = semantic_search(keyword, n=n)
         except FileNotFoundError:
             err_console.print(
                 "[red]Error:[/red] Embeddings cache not found.\n"
@@ -701,7 +702,7 @@ def guide(
             if yes:
                 err_console.print("[red]Error:[/red] AI requested dataset change; not supported in --yes mode.")
                 raise typer.Exit(1)
-            console.print("[dim]Torno alla selezione dataset...[/dim]\n")
+            console.print("[dim]Returning to dataset selection...[/dim]\n")
             continue
         except Exception as e:
             import traceback

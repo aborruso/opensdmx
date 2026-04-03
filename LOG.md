@@ -1,5 +1,14 @@
 # LOG
 
+## 2026-04-03 (3)
+
+- Translate all remaining Italian UI strings in `ai.py` and `cli.py` to English
+- Remove Gemini-based query expansion from semantic search — now Ollama-only
+- Remove `--no-expand` and `--verbose` CLI flags from `search --semantic`
+- Add synonym tip to `search` help and README
+- Document `GOOGLE_API_KEY` requirement in `.env.example` (for `guide` only)
+- Add 22 tests: `test_discovery.py` (set/reset_filters), `test_db_cache.py` (all SQLite cache ops)
+
 ## 2026-04-03 (2)
 
 - Fix: removed production debug log (`/tmp/guide_debug.log`) from `ai.py`

@@ -73,29 +73,7 @@ def build_embeddings(progress: bool = True) -> None:
         print(f"Saved: {cache_path} ({len(rows)} rows, dim={dim})")
 
 
-def _expand_query(query: str) -> str:
-    """Expand query with synonyms and related terms via LLM, in the provider's catalog language."""
-    import io
-    import sys
-    from chatlas import ChatGoogle
-    from .base import get_provider
-    lang = get_provider().get("language", "en")
-    chat = ChatGoogle(model="gemini-2.5-flash")
-    _old_stdout = sys.stdout
-    sys.stdout = io.StringIO()
-    try:
-        response = chat.chat(
-            f"Expand this search query for a statistical dataset catalog. "
-            f"Translate to {lang} if needed, then add 3-5 relevant synonyms or related terms. "
-            f"Return only the expanded query as a single line of keywords, no explanation.\n\n"
-            f"Query: {query}"
-        )
-    finally:
-        sys.stdout = _old_stdout
-    return str(response).strip()
-
-
-def semantic_search(query: str, n: int = 10, expand: bool = True, verbose: bool = False) -> pl.DataFrame:
+def semantic_search(query: str, n: int = 10) -> pl.DataFrame:
     """Return top-N datasets by semantic similarity to query."""
     from .discovery import all_available
 
@@ -114,11 +92,7 @@ def semantic_search(query: str, n: int = 10, expand: bool = True, verbose: bool 
         )
     doc_vecs = np.array(embed_df["embedding"].to_list(), dtype=np.float32)
 
-    expanded = _expand_query(query) if expand else query
-    if verbose and expand:
-        import sys
-        print(f"[expanded query] {expanded}", file=sys.stderr)
-    query_vec = _embed([expanded])[0]
+    query_vec = _embed([query])[0]
 
     # Cosine similarity
     query_norm = query_vec / (np.linalg.norm(query_vec) + 1e-10)

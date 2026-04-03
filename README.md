@@ -175,6 +175,8 @@ opensdmx embed -p istat     # build embeddings for ISTAT
 opensdmx search --semantic "unemployment"
 ```
 
+Tip: semantic search matches meaning, not exact words. Try synonyms or related terms for better results (e.g. "jobless" instead of "unemployment").
+
 ### Caching
 
 Cache is namespaced per provider under `~/.cache/opensdmx/{AGENCY_ID}/`.

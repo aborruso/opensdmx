@@ -122,7 +122,7 @@ def guide_session(ds: dict, objective: str, failed_context: str = "") -> dict:
         message: str = Field(description="What changed and current state, in the user's language")
         confirmed: bool = Field(
             default=False,
-            description="True only if the user clearly confirms to proceed (ok, sì, yes, vai, perfetto…)"
+            description="True only if the user clearly confirms to proceed (ok, yes, sure, go ahead, perfect…)"
         )
 
     # ── Helper: list[DimFilter] → dict ───────────────────────────────────────
@@ -140,7 +140,7 @@ def guide_session(ds: dict, objective: str, failed_context: str = "") -> dict:
                 bad = [c for c in codes if c not in available]
                 if bad:
                     sample = sorted(available)[:8]
-                    return False, f"{dim_id}: {bad} non disponibili. Esempi validi: {sample}"
+                    return False, f"{dim_id}: {bad} not available. Valid examples: {sample}"
         # Use the same HTTP check as the CLI to avoid false positives from CSV parsing errors
         try:
             from .discovery import set_filters
@@ -149,10 +149,10 @@ def guide_session(ds: dict, objective: str, failed_context: str = "") -> dict:
             test_ds = set_filters(ds, **active)
             df = get_data(test_ds, last_n_observations=1)
             if df.is_empty():
-                return False, "Nessun dato per questa combinazione di filtri."
+                return False, "No data for this filter combination."
             # Check response has expected dataset columns (not an XML error parsed as CSV)
             if not set(dims_list).intersection(df.columns):
-                return False, f"Risposta non valida (colonne: {list(df.columns)[:3]})"
+                return False, f"Invalid response (columns: {list(df.columns)[:3]})"
             return True, ""
         except Exception as e:
             return False, str(e)
@@ -160,7 +160,7 @@ def guide_session(ds: dict, objective: str, failed_context: str = "") -> dict:
     # ── AI helper (structured output, history maintained) ─────────────────────
     chat = ChatGoogle(model="gemini-2.5-flash")
 
-    def _ai_structured(msg: str, model_cls, spinner: str = "L'AI sta elaborando..."):
+    def _ai_structured(msg: str, model_cls, spinner: str = "AI is processing..."):
         with console.status(f"[dim]{spinner}[/dim]"):
             with warnings.catch_warnings(), contextlib.redirect_stderr(io.StringIO()):
                 warnings.simplefilter("ignore")
@@ -202,19 +202,19 @@ def guide_session(ds: dict, objective: str, failed_context: str = "") -> dict:
     proposal = _ai_structured(
         proposal_msg,
         ScenarioProposal,
-        spinner="L'AI sta analizzando i dati disponibili e preparando gli scenari...",
+        spinner="AI is analysing available data and preparing scenarios...",
     )
 
     # ── Step 4: Python validates each scenario ────────────────────────────────
     valid_scenarios: list[ScenarioFilter] = []
-    with console.status("[dim]Validazione scenari...[/dim]"):
+    with console.status("[dim]Validating scenarios...[/dim]"):
         for s in proposal.scenarios:  # type: ignore[union-attr]
             ok, _ = _validate(_to_dict(s.filters))
             if ok:
                 valid_scenarios.append(s)
 
     if not valid_scenarios:
-        console.print("[yellow]⚠ Nessuno scenario valido — provo con filtri minimi...[/yellow]")
+        console.print("[yellow]⚠ No valid scenario — trying minimal filters...[/yellow]")
         simple_dict = {
             dim_id: ["TOTAL"] if "TOTAL" in [str(v) for v in _avail.get(dim_id, [])] else []
             for dim_id in dims_list
@@ -223,7 +223,7 @@ def guide_session(ds: dict, objective: str, failed_context: str = "") -> dict:
         if ok:
             valid_scenarios = [ScenarioFilter(
                 name="Base",
-                description="Filtri minimi con valori totali",
+                description="Minimal filters with total values",
                 filters=[DimFilter(dim_id=k, codes=v) for k, v in simple_dict.items()],
                 start_period="2015",
                 end_period="2023",
@@ -231,7 +231,7 @@ def guide_session(ds: dict, objective: str, failed_context: str = "") -> dict:
 
     # ── Step 5: Display valid scenarios ──────────────────────────────────────
     def _fmt_scenario(s: ScenarioFilter, letter: str) -> str:
-        lines = [f"**Scenario {letter}: {s.name}**", s.description, f"Periodo: {s.start_period}–{s.end_period}"]
+        lines = [f"**Scenario {letter}: {s.name}**", s.description, f"Period: {s.start_period}–{s.end_period}"]
         for df in s.filters:
             if df.codes:
                 labels = all_labels.get(df.dim_id, {})
@@ -244,14 +244,14 @@ def guide_session(ds: dict, objective: str, failed_context: str = "") -> dict:
     for i, s in enumerate(valid_scenarios):
         parts.append(_fmt_scenario(s, chr(65 + i)))
     if len(valid_scenarios) > 1:
-        parts.append("\nQuale scenario preferisci? Oppure vuoi modificare qualcosa?")
+        parts.append("\nWhich scenario do you prefer? Or would you like to change something?")
     else:
-        parts.append("\nVuoi procedere con questo scenario o vuoi modificarlo?")
+        parts.append("\nWould you like to proceed with this scenario or modify it?")
 
     display_text = "\n\n".join(parts)
     console.print("\n[bold cyan]AI:[/bold cyan]")
     console.print(Markdown(display_text))
-    console.print("[dim](digita 'esci' o 'cambia' per tornare alla selezione dataset)[/dim]")
+    console.print("[dim](type 'exit' or 'change' to go back to dataset selection)[/dim]")
     console.print()
 
     # ── Step 6: Multi-turn loop (Python validates every update) ───────────────
@@ -266,8 +266,8 @@ def guide_session(ds: dict, objective: str, failed_context: str = "") -> dict:
 
     # Map letters to scenario index for direct selection
     _letter_map = {chr(65 + i): i for i in range(len(valid_scenarios))}
-    _confirm_words = {"sì", "si", "ok", "yes", "vai", "procedi", "perfetto", "confermo", "bene", "andiamo"}
-    _exit_words = {"esci", "exit", "quit", "indietro", "back"}
+    _confirm_words = {"ok", "yes", "sure", "go", "proceed", "perfect", "confirm", "fine", "done"}
+    _exit_words = {"exit", "quit", "back", "change"}
 
     for _ in range(20):
         try:
@@ -279,7 +279,7 @@ def guide_session(ds: dict, objective: str, failed_context: str = "") -> dict:
 
         # Exit / change dataset
         _words_lower_raw = user_input.lower().split()
-        if _exit_words & set(_words_lower_raw) or "cambia dataflow" in user_input.lower() or "cambia dataset" in user_input.lower():
+        if _exit_words & set(_words_lower_raw) or "change dataflow" in user_input.lower() or "change dataset" in user_input.lower():
             raise ChangeDataset()
 
         _word = user_input.strip().upper()
@@ -293,8 +293,8 @@ def guide_session(ds: dict, objective: str, failed_context: str = "") -> dict:
             current_end = valid_scenarios[idx].end_period
             console.print(f"\n[bold cyan]AI:[/bold cyan]")
             console.print(Markdown(
-                f"Hai scelto **Scenario {_word}: {valid_scenarios[idx].name}**.\n\n"
-                f"Periodo suggerito: {current_start}–{current_end}. Va bene o vuoi cambiarlo?\n\n"
+                f"You selected **Scenario {_word}: {valid_scenarios[idx].name}**.\n\n"
+                f"Suggested period: {current_start}–{current_end}. OK or would you like to change it?\n\n"
                 + _fmt_scenario(valid_scenarios[idx], _word)
             ))
             console.print()
@@ -317,7 +317,7 @@ def guide_session(ds: dict, objective: str, failed_context: str = "") -> dict:
         )
 
         update: FilterUpdate = _ai_structured(  # type: ignore[assignment]
-            update_msg, FilterUpdate, spinner="L'AI sta elaborando la tua risposta..."
+            update_msg, FilterUpdate, spinner="AI is processing your request..."
         )
 
         # Python validates
@@ -330,11 +330,11 @@ def guide_session(ds: dict, objective: str, failed_context: str = "") -> dict:
                 f"Current valid filters: {current_filters}\n"
                 "Fix only what is invalid and return a working filter set."
             )
-            update = _ai_structured(fix_msg, FilterUpdate, spinner="Correzione filtri...")  # type: ignore[assignment]
+            update = _ai_structured(fix_msg, FilterUpdate, spinner="Fixing filters...")  # type: ignore[assignment]
             upd_dict = _to_dict(update.filters)  # type: ignore[union-attr]
             ok, err = _validate(upd_dict)
             if not ok:
-                console.print(f"\n[yellow]⚠ Non riesco a trovare una combinazione valida: {err}[/yellow]")
+                console.print(f"\n[yellow]⚠ Could not find a valid combination: {err}[/yellow]")
                 console.print(Markdown(update.message))  # type: ignore[union-attr]
                 console.print()
                 continue
@@ -354,5 +354,5 @@ def guide_session(ds: dict, objective: str, failed_context: str = "") -> dict:
         "filters": current_filters,
         "start_period": current_start,
         "end_period": current_end,
-        "reasoning": f"Guida interattiva per: {objective}",
+        "reasoning": f"Interactive guide for: {objective}",
     }
