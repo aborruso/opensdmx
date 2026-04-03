@@ -462,6 +462,8 @@ def plot(
 ):
     """Plot data for a dataset as a line chart. Extra --DIM VALUE pairs are used as filters."""
     _apply_provider(provider)
+    import matplotlib
+    matplotlib.use("Agg")
     from plotnine import aes, geom_line, geom_point, ggplot, labs, scale_x_date, theme_minimal
 
     import polars as pl
