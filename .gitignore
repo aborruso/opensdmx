@@ -17,3 +17,8 @@ wheels/
 
 # Temp data files
 data.csv
+
+# Internal working notes
+tasks/
+tmp/
+tmp.md
