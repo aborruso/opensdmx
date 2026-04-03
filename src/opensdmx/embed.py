@@ -14,6 +14,27 @@ def _embed_cache_path():
     return get_cache_dir() / "embeddings.parquet"
 
 
+def _check_ollama() -> None:
+    """Raise RuntimeError if Ollama server is unreachable or the embed model is missing."""
+    import ollama
+
+    try:
+        models = ollama.list().models
+    except Exception:
+        raise RuntimeError(
+            f"Ollama server not reachable. Start it with:  ollama serve\n"
+            f"Tip: use keyword search instead:  opensdmx search <keyword>"
+        )
+    available = [m.model for m in models if m.model is not None]
+    # accept exact match or model name without tag (e.g. "nomic-embed-text-v2-moe:latest")
+    if not any(m == _EMBED_MODEL or m.startswith(_EMBED_MODEL + ":") for m in available):
+        raise RuntimeError(
+            f"Ollama model '{_EMBED_MODEL}' not found (available: {', '.join(available) or 'none'}).\n"
+            f"Pull it with:  ollama pull {_EMBED_MODEL}\n"
+            f"Tip: use keyword search instead:  opensdmx search <keyword>"
+        )
+
+
 def _embed(texts: list[str]) -> np.ndarray:
     """Embed a list of texts via Ollama. Returns (N, dim) float32 array."""
     import ollama
@@ -26,6 +47,7 @@ def build_embeddings(progress: bool = True) -> None:
     """Encode all catalog descriptions and save to the provider's cache directory."""
     from .discovery import all_available
 
+    _check_ollama()
     catalog = all_available()
     if catalog.is_empty():
         raise RuntimeError("No datasets found. Check your provider or network connection.")
@@ -77,6 +99,7 @@ def semantic_search(query: str, n: int = 10, expand: bool = True, verbose: bool 
     """Return top-N datasets by semantic similarity to query."""
     from .discovery import all_available
 
+    _check_ollama()
     cache_path = _embed_cache_path()
     if not cache_path.exists():
         raise FileNotFoundError(
