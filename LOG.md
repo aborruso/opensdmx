@@ -1,11 +1,31 @@
 # LOG
 
+## 2026-04-03
+
+- Feat: CLI agent-friendly — `guide --yes --dataset` (non-interactive, auto-download), `blacklist --remove`, fail-fast for missing embeddings, examples with default provider note in all `--help`
+
+## 2026-04-02 (3)
+
+- Fix `guide`: removed `lookup_dimension_values` from AI model — now uses only constraint values
+- Fix `guide`: "tutti"/"all" → selects TOTAL if available, otherwise no filter (never all individual codes)
+- Feat `guide`: new flow — AI reads all constraints on first turn and proposes 2-3 tested scenarios; user chooses or customises dimension by dimension
+
+## 2026-04-02 (2)
+
+- Fix: `_rate_limit_check` now writes to `sys.stderr` instead of `print()` — avoids polluting stdout in pipes
+- Fix: HTTP errors now show status code and URL; suggest `opensdmx constraints` on 400/404; use `reraise=True` in tenacity to avoid wrapping in `RetryError`
+- Refactor: extracted `_parse_extra_filters()` — removes duplication between `get` and `plot`
+- Feat: `get`/`plot` support multiple values per dimension: `--geo IT --geo FR` → `IT+FR` in URL
+- Fix: removed hardcoded `curl` from `guide` results panel
+
 ## 2026-04-02
 
-- Fix OECD provider support: `search`, `info`, `constraints`, `get` ora funzionano
-  - `portals.json`: aggiunto `catalog_agency: "all"` (endpoint `/dataflow/all`) e `constraint_params: {}` (no `references=none` che dava 500)
-  - `discovery.py`: usa `catalog_agency` per il path del catalogo; salva `df_id` come `{agencyID},{id}` (es. `OECD.SDD.STES,DSD_STES@DF_CLI`) per costruire correttamente gli URL dati
-  - Provider Eurostat e ISTAT invariati
+- `opensdmx` with no arguments shows version + help (instead of doing nothing)
+
+- Fix OECD provider support: `search`, `info`, `constraints`, `get` now work
+  - `portals.json`: added `catalog_agency: "all"` (endpoint `/dataflow/all`) and `constraint_params: {}` (no `references=none` which returned 500)
+  - `discovery.py`: uses `catalog_agency` for catalog path; saves `df_id` as `{agencyID},{id}` (e.g. `OECD.SDD.STES,DSD_STES@DF_CLI`) to correctly build data URLs
+  - Eurostat and ISTAT providers unchanged
 
 ## 2026-04-01 (2)
 
@@ -17,10 +37,10 @@
 
 ## 2026-04-01
 
-- Test CLI ISTAT completati: `search`, `info`, `values`, `get`, `get --out`, `get --last-n`, `get` valori multipli, `plot`, `plot` con opzioni — tutti ok
-- Dataset di riferimento: `168_2` con `DATA_TYPE=13`, `MEASURE=4`, `REF_AREA=IT`, `COICOP_REV_ISTAT=00`
-- Fix bug: `plot` ignorava `--start-period`/`--end-period` (trattati come dimensioni); aggiunti come opzioni typer e passati a `get_data()` — aborruso/opensdmx#1
-- Aggiornato `docs/cli-test-examples.md` con esempio ISTAT corretto
+- ISTAT CLI tests completed: `search`, `info`, `values`, `get`, `get --out`, `get --last-n`, `get` multiple values, `plot`, `plot` with options — all ok
+- Reference dataset: `168_2` with `DATA_TYPE=13`, `MEASURE=4`, `REF_AREA=IT`, `COICOP_REV_ISTAT=00`
+- Fix bug: `plot` ignored `--start-period`/`--end-period` (treated as dimensions); added as typer options and passed to `get_data()` — aborruso/opensdmx#1
+- Updated `docs/cli-test-examples.md` with correct ISTAT example
 
 ## 2026-03-31 (2)
 
@@ -53,71 +73,71 @@
 
 ## 2026-02-28
 
-- `cli.py guide`: risultato finale mostra anche comando `istatpy get` oltre all'URL e al curl
-- `db_cache.py`: aggiunta colonna `description` a `invalid_datasets` (migration automatica); `save_invalid_dataset` ora accetta description; aggiunte `list_invalid_datasets()` e `delete_invalid_dataset()`
-- `cli.py`: nuovo comando `blacklist` — lista i dataset in lista nera e permette rimozione con checkbox interattivo
-- `docs/database.md`: nuovo file con schema di tutti i file di cache (parquet + SQLite) e diagramma ER Mermaid
-- `README.md`: link a `docs/database.md` nella sezione Caching; aggiunto `blacklist` nella tabella comandi
+- `cli.py guide`: final result also shows `istatpy get` command alongside URL and curl
+- `db_cache.py`: added `description` column to `invalid_datasets` (auto migration); `save_invalid_dataset` now accepts description; added `list_invalid_datasets()` and `delete_invalid_dataset()`
+- `cli.py`: new `blacklist` command — lists blacklisted datasets and allows removal via interactive checkbox
+- `docs/database.md`: new file with schema of all cache files (parquet + SQLite) and Mermaid ER diagram
+- `README.md`: link to `docs/database.md` in Caching section; added `blacklist` to commands table
 
 ## 2026-02-28 (availableconstraint cache + combo validation)
 
-- `db_cache.py`: nuova tabella `available_constraints`; get/save cached per 7gg
-- `discovery.py`: `get_available_values()` ora usa cache SQLite; endpoint semplificato (`references=none`)
-- `ai.py`: `lookup_actual_values` usa `get_available_values()` (cached) invece del sample raw; rimozione fetch sample iniziale
-- `cli.py guide` step 6b: validazione codici su `availableconstraint` (più affidabile della codelist)
-- `cli.py guide` step 6c: validazione combinazione filtri con sample reale (`lastNObservations=1` + filtri attivi); avviso se 404
+- `db_cache.py`: new `available_constraints` table; get/save cached for 7 days
+- `discovery.py`: `get_available_values()` now uses SQLite cache; simplified endpoint (`references=none`)
+- `ai.py`: `lookup_actual_values` uses `get_available_values()` (cached) instead of raw sample; removed initial sample fetch
+- `cli.py guide` step 6b: code validation against `availableconstraint` (more reliable than codelist)
+- `cli.py guide` step 6c: filter combination validation with real sample (`lastNObservations=1` + active filters); warn if 404
 
 ## 2026-02-28 (real data codes in guide)
 
-- `ai.py`: aggiunto tool `lookup_actual_values(dimension_id)` — campiona dati reali con `lastNObservations=1` all'avvio sessione; restituisce valori effettivi (es. `UNEMP`, `1`, `2`) invece di codici codelist teorici (es. `UNEM_TI`, `M`, `F`)
-- `lookup_dimension_values` resta per le descrizioni testuali; system prompt specifica che i filtri usano solo `lookup_actual_values`
-- Il campione viene scaricato una volta sola all'inizio della sessione (un'unica chiamata API extra)
+- `ai.py`: added `lookup_actual_values(dimension_id)` tool — samples real data with `lastNObservations=1` at session start; returns actual values (e.g. `UNEMP`, `1`, `2`) instead of theoretical codelist codes (e.g. `UNEM_TI`, `M`, `F`)
+- `lookup_dimension_values` kept for text descriptions; system prompt specifies filters use only `lookup_actual_values`
+- Sample downloaded once at session start (single extra API call)
 
 ## 2026-02-28 (invalid dataset filtering)
 
-- `db_cache.py`: aggiunta tabella `invalid_datasets`; `save_invalid_dataset()`, `get_invalid_dataset_ids()`
-- `discovery.py`: `all_available()` filtra automaticamente i dataset invalidi
-- `cli.py` `guide`: check disponibilità API spostato PRIMA della sessione AI (dopo conferma dataset); se non disponibile → segna come invalido, torna alla selezione senza sprecare tempo AI
+- `db_cache.py`: added `invalid_datasets` table; `save_invalid_dataset()`, `get_invalid_dataset_ids()`
+- `discovery.py`: `all_available()` automatically filters invalid datasets
+- `cli.py` `guide`: API availability check moved BEFORE AI session (after dataset confirmation); if unavailable → mark as invalid, return to selection without wasting AI time
 
 ## 2026-02-28 (period filters + obs limits)
 
-- `get_data`/`istat_get`: aggiunto `first_n_observations` (`firstNObservations` SDMX) affiancato a `last_n_observations`
-- CLI `get`: aggiunte opzioni `--start-period`, `--end-period`, `--last-n`, `--first-n`
-- `ai.py`: system prompt rafforzato — l'AI DEVE chiamare `lookup_dimension_values` prima di proporre qualsiasi codice, non inventare codici
+- `get_data`/`istat_get`: added `first_n_observations` (`firstNObservations` SDMX) alongside `last_n_observations`
+- CLI `get`: added `--start-period`, `--end-period`, `--last-n`, `--first-n` options
+- `ai.py`: system prompt hardened — AI MUST call `lookup_dimension_values` before proposing any code, no invented codes
 
 ## 2026-02-28 (bug fixes)
 
-- Fix `make_url_key`: valori "." ora mappati a stringa vuota → URL SDMX corretto (`A....` invece di `A........`)
-- `guide_session`: warning chatlas soppressi; `_chat()` helper gestisce `get_last_turn()` None-safe
-- `FilterItem.codes: list[str]`: supporto multi-valore per dimensioni (es. SEX = M+F)
-- Validazione filtri in `guide`: controlla ogni codice singolarmente contro i valori reali
-- `lookup_dimension_values` tool: l'AI verifica autonomamente i codici senza delegare all'utente
-- Cache spostata in `~/.cache/istatpy/`; `df_description_it` aggiunta al catalogo
+- Fix `make_url_key`: "." values now mapped to empty string → correct SDMX URL (`A....` instead of `A........`)
+- `guide_session`: chatlas warnings suppressed; `_chat()` helper handles `get_last_turn()` None-safe
+- `FilterItem.codes: list[str]`: multi-value support for dimensions (e.g. SEX = M+F)
+- Filter validation in `guide`: checks each code individually against actual values
+- `lookup_dimension_values` tool: AI verifies codes autonomously without delegating to user
+- Cache moved to `~/.cache/istatpy/`; `df_description_it` added to catalog
 
 ## 2026-02-28 (it description)
 
-- Aggiunta `df_description_it` ai dataflow (nome italiano da SDMX `Name xml:lang="it"`)
-- `embed.py`: testo embedding = `"en / it"` per migliore ricerca semantica in italiano
-- `semantic_search()`: restituisce anche `df_description_it`
-- `guide`: mostra descrizione italiana nella lista selezione dataset
+- Added `df_description_it` to dataflows (Italian name from SDMX `Name xml:lang="it"`)
+- `embed.py`: embedding text = `"en / it"` for better semantic search in Italian
+- `semantic_search()`: also returns `df_description_it`
+- `guide`: shows Italian description in dataset selection list
 
 ## 2026-02-28 (cache dir)
 
-- Cache spostata da `/tmp/` a `~/.cache/istatpy/` (persistente tra reboot)
-- `base.py`: aggiunta `CACHE_DIR = Path.home() / ".cache" / "istatpy"` con `mkdir`
-- `db_cache.py`, `discovery.py`, `embed.py`: usano `CACHE_DIR` invece di `tempfile.gettempdir()`
+- Cache moved from `/tmp/` to `~/.cache/istatpy/` (persistent across reboots)
+- `base.py`: added `CACHE_DIR = Path.home() / ".cache" / "istatpy"` with `mkdir`
+- `db_cache.py`, `discovery.py`, `embed.py`: use `CACHE_DIR` instead of `tempfile.gettempdir()`
 
 ## 2026-02-28 (guide)
 
-- Sostituiti `wizard` e `ask` con `guide`: ricerca semantica + conversazione AI multi-turn per filtri
-- `ai.py`: rimossi `find_dataset`/`find_filters`; aggiunto `guide_session(ds, objective)` — chatlas multi-turn con Gemini, estrae filtri a conferma utente
-- `cli.py`: rimossi comandi `wizard` e `ask`; aggiunto `guide [query]` — selezione paginata dataset + sessione AI interattiva + URL SDMX finale
-- `docs/PRD.md`: creato PRD del flusso guide
+- Replaced `wizard` and `ask` with `guide`: semantic search + multi-turn AI conversation for filters
+- `ai.py`: removed `find_dataset`/`find_filters`; added `guide_session(ds, objective)` — chatlas multi-turn with Gemini, extracts filters with user confirmation
+- `cli.py`: removed `wizard` and `ask` commands; added `guide [query]` — paginated dataset selection + interactive AI session + final SDMX URL
+- `docs/PRD.md`: created PRD for guide flow
 
 ## 2026-02-28
 
-- `istatpy ask [objective]`: full AI flow — trova dataset via semantic search, poi filtri; conferma step-by-step (dataset → filtri → download); `--out` option
-- `ai.py`: `find_dataset()` (usa `search_datasets` tool) + `find_filters()` (usa `get_values_for_dimension` tool); due chiamate separate per conferma progressiva
+- `istatpy ask [objective]`: full AI flow — finds dataset via semantic search, then filters; step-by-step confirmation (dataset → filters → download); `--out` option
+- `ai.py`: `find_dataset()` (uses `search_datasets` tool) + `find_filters()` (uses `get_values_for_dimension` tool); two separate calls for progressive confirmation
 - deps: added `chatlas[google]>=0.7` to `pyproject.toml`
 
 ## 2026-02-27
@@ -127,6 +147,7 @@
 - `db_cache.py`: SQLite cache `/tmp/istatpy_cache.db` (TTL 7d) for dimensions and codelist values — cold 52s → cached 0.0s
 - Fix: use `ALL` instead of `IT1` as agency on `datastructure` and `codelist` endpoints (fixes 404 on cross-agency datasets)
 - `istatpy wizard`: interactive dataset discovery, paginated results, fuzzy value filtering (InquirerPy), auto-select DATA_DOMAIN, SDMX URL output
+
 - Rate limit: countdown timer (updates every 0.2s), interval raised to 13s
 
 ## 2026-02-26 (i18n)

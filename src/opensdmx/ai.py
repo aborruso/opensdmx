@@ -1,254 +1,364 @@
-"""AI-assisted filter selection via chatlas (multi-turn conversation)."""
+"""AI-assisted filter selection — Python controls flow, AI produces structured JSON."""
 from __future__ import annotations
 
 
-def _structured_extract(text: str, model_cls, prompt: str) -> object:
-    """Extract structured data from text using a second chat (no tools)."""
-    from chatlas import ChatGoogle
-    chat = ChatGoogle(model="gemini-2.5-flash")
-    return chat.chat_structured(
-        f"{prompt}\n\nTesto da analizzare:\n{text}",
-        data_model=model_cls,
-    )
+class ChangeDataset(Exception):
+    """Raised when the user wants to go back to dataset selection."""
 
 
-def guide_session(ds: dict, objective: str) -> dict:
-    """Multi-turn AI conversation to select filters for a dataset.
+def guide_session(ds: dict, objective: str, failed_context: str = "") -> dict:
+    """Guide user to select filters for a dataset.
 
-    Returns {'filters': dict[str,str], 'reasoning': str}.
+    Architecture: Python fetches constraints and validates combos.
+    AI only translates natural language → structured filter JSON.
+    Returns {'filters': dict, 'start_period': str, 'end_period': str, 'reasoning': str}.
     """
+    import contextlib
+    import io
+    import warnings
+
     from chatlas import ChatGoogle
-    from pydantic import BaseModel
+    from pydantic import BaseModel, Field
     from rich.console import Console
+    from rich.markdown import Markdown
+    from rich.table import Table as _Table
 
     from .base import get_provider, set_rate_limit_context
-    from .discovery import _get_dimension_description, get_available_values, get_dimension_values
+    from .db_cache import (
+        get_cached_available_constraints,
+        get_cached_codelist_values,
+        is_codelist_info_cached,
+    )
+    from .discovery import _get_dimension_description, get_available_values
 
     console = Console()
     dims = ds["dimensions"]
     dims_list = list(dims.keys())
 
-    # Fetch available constraints once (cached) — used by lookup_actual_values
-    console.print("[dim]Caricamento valori disponibili...[/dim]")
-    set_rate_limit_context(f"Scaricando valori disponibili per {ds['df_id']}")
+    # ── Step 1: Fetch constraints (Python, not AI) ────────────────────────────
+    _cached = get_cached_available_constraints(ds["df_id"])
+    if _cached is None:
+        console.print("[dim]Loading available values...[/dim]")
+        set_rate_limit_context(f"Downloading available values for {ds['df_id']}")
     try:
         _avail = {dim_id: df["id"].to_list() for dim_id, df in get_available_values(ds).items()}
     except Exception as _e:
         _avail = {}
-        console.print(f"[yellow]⚠ Valori disponibili non caricati: {_e}[/yellow]")
-    set_rate_limit_context("")
-    if not _avail:
-        console.print("[yellow]⚠ Conteggio valori non disponibile per questo dataset.[/yellow]")
-
-    def lookup_actual_values(dimension_id: str) -> str:
-        """Restituisce i valori EFFETTIVAMENTE presenti nel dataset per una dimensione,
-        con descrizione testuale se disponibile in cache.
-        Usa questo tool per ottenere i codici da usare nei filtri."""
-        from .db_cache import get_cached_codelist_values
-        try:
-            if not _avail:
-                return "Valori disponibili non caricati."
-            if dimension_id not in _avail:
-                return f"Dimensione '{dimension_id}' non trovata. Disponibili: {', '.join(_avail.keys())}"
-            codes = sorted(str(v) for v in _avail[dimension_id] if v is not None)
-            # Try to enrich with descriptions from codelist cache (no API call)
-            codelist_id = dims.get(dimension_id, {}).get("codelist_id")
-            labels = {}
-            if codelist_id:
-                cached = get_cached_codelist_values(codelist_id)
-                if cached:
-                    labels = {r["id"]: r["name"] for r in cached}
-            if labels:
-                lines = [f"{c} = {labels[c]}" if c in labels else c for c in codes]
-                return f"Valori disponibili per {dimension_id}:\n" + "\n".join(lines)
-            return f"Valori disponibili per {dimension_id}: {', '.join(codes)}"
-        except Exception as e:
-            return f"Errore: {e}"
-
-    def lookup_dimension_values(dimension_id: str) -> str:
-        """Restituisce le descrizioni testuali dei codici di una dimensione (dalla codelist).
-        Usa questo tool solo per capire il significato dei codici, NON per scegliere i filtri."""
-        try:
-            if dimension_id not in dims:
-                return f"Dimensione '{dimension_id}' non trovata. Disponibili: {', '.join(dims.keys())}"
-            set_rate_limit_context(f"Scaricando codelist per la dimensione {dimension_id}")
-            val_df = get_dimension_values(ds, dimension_id)
-            set_rate_limit_context("")
-            return "\n".join(f"{r['id']}={r['name']}" for r in val_df.iter_rows(named=True))
-        except Exception as e:
-            set_rate_limit_context("")
-            return f"Errore: {e}"
-
-    # Build dimension info: description only (no codelist samples — unreliable)
-    dim_info_parts = []
-    for dim_id, dim_meta in dims.items():
-        codelist_id = dim_meta.get("codelist_id")
-        set_rate_limit_context(f"Scaricando info per la dimensione {dim_id}")
-        description = _get_dimension_description(codelist_id) or dim_id
-        n_vals = len(_avail.get(dim_id, []))
-        count_str = f" ({n_vals} valori)" if n_vals else ""
-        dim_info_parts.append(f"  {dim_id}: {description}{count_str}")
+        console.print(f"[yellow]⚠ Available values not loaded: {_e}[/yellow]")
     set_rate_limit_context("")
 
-    dim_block = "\n".join(dim_info_parts)
-
-    # Print dimension summary directly to the user (counts visible regardless of AI phrasing)
-    from rich.table import Table as _Table
+    # ── Step 2: Build constraint context (codes + labels) for AI ─────────────
+    dim_context_parts: list[str] = []
     _dim_table = _Table(show_header=True, header_style="bold", box=None, padding=(0, 1))
-    _dim_table.add_column("Dimensione", style="cyan", no_wrap=True)
-    _dim_table.add_column("Descrizione")
-    _dim_table.add_column("Valori", style="dim", justify="right")
+    _dim_table.add_column("Dimension", style="cyan", no_wrap=True)
+    _dim_table.add_column("Description")
+    _dim_table.add_column("Values", style="dim", justify="right")
+
+    all_labels: dict[str, dict[str, str]] = {}  # dim_id → {code: label}
+
     for dim_id, dim_meta in dims.items():
         codelist_id = dim_meta.get("codelist_id")
+        if codelist_id and not is_codelist_info_cached(codelist_id):
+            set_rate_limit_context(f"Downloading info for dimension {dim_id}")
         description = _get_dimension_description(codelist_id) or dim_id
-        n_vals = len(_avail.get(dim_id, []))
+        set_rate_limit_context("")
+
+        codes = sorted(str(v) for v in _avail.get(dim_id, []) if v is not None)
+        n_vals = len(codes)
         _dim_table.add_row(dim_id, description, str(n_vals) if n_vals else "?")
-    console.print("\n[bold]Dimensioni del dataset:[/bold]")
+
+        labels: dict[str, str] = {}
+        if codelist_id:
+            cached_vals = get_cached_codelist_values(codelist_id)
+            if cached_vals:
+                labels = {r["id"]: r["name"] for r in cached_vals}
+        all_labels[dim_id] = labels
+
+        code_lines = [f"  {c} = {labels[c]}" if c in labels else f"  {c}" for c in codes]
+        dim_context_parts.append(
+            f"Dimension {dim_id} ({description}, {n_vals} values available):\n"
+            + "\n".join(code_lines)
+        )
+
+    # Show TIME_PERIOD range if available in constraints
+    time_range_str = ""
+    if "TIME_PERIOD" in _avail:
+        _tp = sorted(str(v) for v in _avail["TIME_PERIOD"] if v is not None)
+        if _tp:
+            time_range_str = f"{_tp[0]} – {_tp[-1]}"
+
+    console.print("\n[bold]Dataset dimensions:[/bold]")
     console.print(_dim_table)
+    if time_range_str:
+        console.print(f"[dim]Available period: {time_range_str}[/dim]")
     console.print()
 
+    constraint_context = "\n\n".join(dim_context_parts)
+    if time_range_str:
+        constraint_context += f"\n\nTIME_PERIOD available range: {time_range_str}"
     provider_name = get_provider().get("agency_id", "SDMX")
-    system_prompt = (
-        f"You are a statistical data assistant for {provider_name}. "
-        "Your ONLY task is to help the user choose the right filters for the dataset.\n\n"
-        f"Dataset: {ds['df_id']} — {ds['df_description']}\n\n"
-        f"Dimensions: {dim_block}\n\n"
-        "MANDATORY RULES (no exceptions):\n"
-        "1. Always reply in the user's language.\n"
-        "2. EVERY TIME you present a dimension to the user, call lookup_actual_values FIRST.\n"
-        "   Show the available values with their description BEFORE asking any question about the dimension.\n"
-        "   Never ask 'what data type do you want?' without first showing the available values.\n"
-        "   The codes returned by lookup_actual_values are the ONLY valid codes.\n"
-        "   NEVER use codes from the codelist, memory, or any other source.\n"
-        "3. lookup_dimension_values is ONLY for reading the textual meaning of an already validated code.\n"
-        "4. Before proposing the final filters, call test_filter_combination with the chosen combination.\n"
-        "   If it returns NO DATA, adjust the filters (change AGE, REF_AREA, etc.) and retest.\n"
-        "5. Only propose filters that test_filter_combination has confirmed as working.\n"
-        "6. When the user confirms (e.g. 'ok', 'go', 'yes', 'perfect', 'proceed'), "
-        "   reply ONLY with the summary of chosen filters. Do not ask further questions.\n"
-        "7. NEVER discuss downloading, visualizations, or data analysis: "
-        "   these are handled by the external CLI. "
-        "   If the user asks to download or analyze, tell them to do so after with the CLI.\n"
-        "8. Never enter a question loop. If filters are ready and the user has confirmed, stop."
-    )
 
-    def test_filter_combination(**kwargs) -> str:
-        """Verifica se una combinazione di filtri produce dati reali.
-        Passa i filtri come argomenti chiave-valore (es. FREQ='A', AGE='Y15-24', REF_AREA='ITC1').
-        IMPORTANTE: controlla che i valori richiesti siano effettivamente presenti nei dati restituiti.
-        L'API può restituire dati anche se un filtro è ignorato — questo tool lo rileva."""
+    # ── Pydantic models ───────────────────────────────────────────────────────
+    # Note: Gemini does not support dict with additionalProperties — use lists.
+    class DimFilter(BaseModel):
+        dim_id: str = Field(description="Dimension identifier e.g. 'geo'")
+        codes: list[str] = Field(description="Selected codes. Empty list = no filter.")
+
+    class ScenarioFilter(BaseModel):
+        name: str = Field(description="Short scenario name")
+        description: str = Field(description="One-line description in the user's language")
+        filters: list[DimFilter] = Field(description="List of dimension filters")
+        start_period: str = Field(default="", description="Suggested start year e.g. '2015'")
+        end_period: str = Field(default="", description="Suggested end year e.g. '2023'")
+
+    class ScenarioProposal(BaseModel):
+        scenarios: list[ScenarioFilter]
+        intro: str = Field(description="Brief intro message in user's language")
+
+    class FilterUpdate(BaseModel):
+        filters: list[DimFilter] = Field(description="Full updated filter set as list of DimFilter")
+        start_period: str = Field(default="", description="Start year e.g. '2019'")
+        end_period: str = Field(default="", description="End year e.g. '2023'")
+        message: str = Field(description="What changed and current state, in the user's language")
+        confirmed: bool = Field(
+            default=False,
+            description="True only if the user clearly confirms to proceed (ok, sì, yes, vai, perfetto…)"
+        )
+
+    # ── Helper: list[DimFilter] → dict ───────────────────────────────────────
+    def _to_dict(filters) -> dict[str, list[str]]:
+        return {f.dim_id: f.codes for f in filters}
+
+    # ── Python validation ─────────────────────────────────────────────────────
+    def _validate(filters: dict[str, list[str]]) -> tuple[bool, str]:
+        """Check codes are in constraints, then try a real HTTP fetch."""
+        for dim_id, codes in filters.items():
+            if not codes:
+                continue
+            available = {str(v) for v in _avail.get(dim_id, [])}
+            if available:
+                bad = [c for c in codes if c not in available]
+                if bad:
+                    sample = sorted(available)[:8]
+                    return False, f"{dim_id}: {bad} non disponibili. Esempi validi: {sample}"
+        # Use the same HTTP check as the CLI to avoid false positives from CSV parsing errors
         try:
             from .discovery import set_filters
             from .retrieval import get_data
-            test_ds = set_filters(ds, **kwargs)
+            active = {k: (v[0] if len(v) == 1 else v) for k, v in filters.items() if v}
+            test_ds = set_filters(ds, **active)
             df = get_data(test_ds, last_n_observations=1)
+            # Log for debugging
+            import datetime
+            with open("/tmp/guide_debug.log", "a") as _f:
+                _f.write(f"\n[{datetime.datetime.now().isoformat()}]\n")
+                _f.write(f"filters: {filters}\n")
+                _f.write(f"df.shape: {df.shape}, columns: {list(df.columns)[:6]}\n")
             if df.is_empty():
-                return "NESSUN DATO: la combinazione non produce risultati."
-            # Verify each requested value is actually in the returned data
-            issues = []
-            confirmed = {}
-            for col, requested in kwargs.items():
-                if col not in df.columns:
-                    continue
-                actual_vals = sorted(str(v) for v in df[col].unique().to_list() if v is not None)
-                confirmed[col] = actual_vals
-                req_list = requested if isinstance(requested, list) else [requested]
-                missing = [r for r in req_list if str(r) not in actual_vals]
-                if missing:
-                    issues.append(
-                        f"{col}={missing} NON trovato nei dati reali (trovato: {actual_vals})"
-                    )
-            if issues:
-                return (
-                    f"FILTRI NON VALIDI: {'; '.join(issues)}. "
-                    "Usa i valori effettivamente trovati nei dati."
-                )
-            return f"OK: {len(df)} righe. Valori confermati nei dati: {confirmed}"
+                return False, "Nessun dato per questa combinazione di filtri."
+            # Check response has expected dataset columns (not an XML error parsed as CSV)
+            if not set(dims_list).intersection(df.columns):
+                return False, f"Risposta non valida (colonne: {list(df.columns)[:3]})"
+            return True, ""
         except Exception as e:
-            return f"ERRORE: {e}"
+            return False, str(e)
 
-    import warnings
-    warnings.filterwarnings("ignore")
-    chat = ChatGoogle(model="gemini-2.5-flash", system_prompt=system_prompt)
-    chat.register_tool(lookup_actual_values)
-    chat.register_tool(lookup_dimension_values)
-    chat.register_tool(test_filter_combination)
+    # ── AI helper (structured output, history maintained) ─────────────────────
+    chat = ChatGoogle(model="gemini-2.5-flash")
 
-    import contextlib
-    import io
-
-    def _chat(msg: str) -> str:
-        with warnings.catch_warnings(), contextlib.redirect_stderr(io.StringIO()):
-            warnings.simplefilter("ignore")
-            chat.chat(msg, echo="none")
-        turn = chat.get_last_turn()
-        text = (turn.text or "") if turn is not None else ""
-        if not text:
+    def _ai_structured(msg: str, model_cls, spinner: str = "L'AI sta elaborando..."):
+        with console.status(f"[dim]{spinner}[/dim]"):
             with warnings.catch_warnings(), contextlib.redirect_stderr(io.StringIO()):
                 warnings.simplefilter("ignore")
-                chat.chat("Riassumi in testo la situazione e proponi i filtri se sei pronto.", echo="none")
-            turn = chat.get_last_turn()
-            text = (turn.text or "") if turn is not None else ""
-        return text
+                return chat.chat_structured(msg, data_model=model_cls)
 
-    # First turn: AI explains the dataset
-    ai_text = _chat(
-        f"L'utente vuole analizzare: {objective}\n\nSpiega il dataset e cosa si può fare con esso."
+    # ── Base system context (injected in every AI call) ───────────────────────
+    base_ctx = (
+        f"You are a statistical data assistant for {provider_name}.\n"
+        f"Dataset: {ds['df_id']} — {ds['df_description']}\n\n"
+        f"AVAILABLE CODES (use ONLY these — never invent codes):\n{constraint_context}\n\n"
+        "Rules:\n"
+        "- Always reply in the user's language. Translate all descriptions.\n"
+        "- Use ONLY the codes listed above.\n"
+        "- TOTAL means 'statistical aggregate of all items' (one row summing everything). "
+        "It does NOT mean 'all individual items'. "
+        "When user wants one row PER country/item → use empty list [] (no filter = all individual values returned). "
+        "When user wants the aggregate total → use TOTAL.\n"
+        "- Max 3 codes per dimension for specific selections; for all individual values use empty list [].\n"
+        "- Every scenario must have a meaningful start_period and end_period.\n"
+        "- confirmed=True only when user clearly agrees to proceed."
     )
 
-    # Multi-turn loop (max 20 turns to avoid infinite loops)
-    _max_turns = 20
-    _turn = 0
-    while _turn < _max_turns:
-        _turn += 1
-        from rich.markdown import Markdown
-        console.print("\n[bold cyan]AI:[/bold cyan]")
-        console.print(Markdown(ai_text))
-        console.print()
+    # ── Step 3: AI proposes scenarios ─────────────────────────────────────────
+    if failed_context:
+        proposal_msg = (
+            f"{base_ctx}\n\n"
+            f"User objective: {objective}\n\n"
+            f"PREVIOUS FILTERS FAILED (returned no data): {failed_context}\n"
+            "Identify why they failed and propose corrected filter scenarios."
+        )
+    else:
+        proposal_msg = (
+            f"{base_ctx}\n\n"
+            f"User objective: {objective}\n\n"
+            "Propose 2-3 distinct filter scenarios for the user's objective. "
+            "Each must have a meaningful time range."
+        )
 
+    proposal = _ai_structured(
+        proposal_msg,
+        ScenarioProposal,
+        spinner="L'AI sta analizzando i dati disponibili e preparando gli scenari...",
+    )
+
+    # ── Step 4: Python validates each scenario ────────────────────────────────
+    valid_scenarios: list[ScenarioFilter] = []
+    with console.status("[dim]Validazione scenari...[/dim]"):
+        for s in proposal.scenarios:  # type: ignore[union-attr]
+            ok, _ = _validate(_to_dict(s.filters))
+            if ok:
+                valid_scenarios.append(s)
+
+    if not valid_scenarios:
+        console.print("[yellow]⚠ Nessuno scenario valido — provo con filtri minimi...[/yellow]")
+        simple_dict = {
+            dim_id: ["TOTAL"] if "TOTAL" in [str(v) for v in _avail.get(dim_id, [])] else []
+            for dim_id in dims_list
+        }
+        ok, _ = _validate(simple_dict)
+        if ok:
+            valid_scenarios = [ScenarioFilter(
+                name="Base",
+                description="Filtri minimi con valori totali",
+                filters=[DimFilter(dim_id=k, codes=v) for k, v in simple_dict.items()],
+                start_period="2015",
+                end_period="2023",
+            )]
+
+    # ── Step 5: Display valid scenarios ──────────────────────────────────────
+    def _fmt_scenario(s: ScenarioFilter, letter: str) -> str:
+        lines = [f"**Scenario {letter}: {s.name}**", s.description, f"Periodo: {s.start_period}–{s.end_period}"]
+        for df in s.filters:
+            if df.codes:
+                labels = all_labels.get(df.dim_id, {})
+                code_str = ", ".join(f"{c} ({labels[c]})" if c in labels else c for c in df.codes)
+                lines.append(f"- {df.dim_id}: {code_str}")
+        return "\n".join(lines)
+
+    intro = getattr(proposal, "intro", "") or ""  # type: ignore[union-attr]
+    parts = [intro] if intro else []
+    for i, s in enumerate(valid_scenarios):
+        parts.append(_fmt_scenario(s, chr(65 + i)))
+    if len(valid_scenarios) > 1:
+        parts.append("\nQuale scenario preferisci? Oppure vuoi modificare qualcosa?")
+    else:
+        parts.append("\nVuoi procedere con questo scenario o vuoi modificarlo?")
+
+    display_text = "\n\n".join(parts)
+    console.print("\n[bold cyan]AI:[/bold cyan]")
+    console.print(Markdown(display_text))
+    console.print("[dim](digita 'esci' o 'cambia' per tornare alla selezione dataset)[/dim]")
+    console.print()
+
+    # ── Step 6: Multi-turn loop (Python validates every update) ───────────────
+    current_filters: dict[str, list[str]] = _to_dict(valid_scenarios[0].filters) if valid_scenarios else {}
+    current_start = valid_scenarios[0].start_period if valid_scenarios else ""
+    current_end = valid_scenarios[0].end_period if valid_scenarios else ""
+
+    scenarios_summary = "\n".join(
+        f"Scenario {chr(65+i)}: {s.name} — filters={_to_dict(s.filters)}, period={s.start_period}–{s.end_period}"
+        for i, s in enumerate(valid_scenarios)
+    )
+
+    # Map letters to scenario index for direct selection
+    _letter_map = {chr(65 + i): i for i in range(len(valid_scenarios))}
+    _confirm_words = {"sì", "si", "ok", "yes", "vai", "procedi", "perfetto", "confermo", "bene", "andiamo"}
+    _exit_words = {"esci", "exit", "quit", "indietro", "back"}
+
+    for _ in range(20):
         try:
             user_input = input("Tu: ").strip()
         except (KeyboardInterrupt, EOFError):
             raise SystemExit(0)
-
         if not user_input:
             continue
 
-        _words = user_input.lower().split()
-        _confirm_words = {"sì", "si", "ok", "confermo", "conferma", "yes", "vai", "procedi", "avanti", "perfetto", "esatto", "bene", "andiamo"}
-        confirmed = (
-            len(_words) <= 3
-            and bool(_confirm_words & set(_words))
-        )
+        # Exit / change dataset
+        _words_lower_raw = user_input.lower().split()
+        if _exit_words & set(_words_lower_raw) or "cambia dataflow" in user_input.lower() or "cambia dataset" in user_input.lower():
+            raise ChangeDataset()
 
-        ai_text = _chat(user_input)
+        _word = user_input.strip().upper()
+        _words_lower = user_input.lower().split()
 
-        if confirmed and ai_text:
+        # Direct scenario selection (A/B/C) — use already-validated filters directly
+        if _word in _letter_map:
+            idx = _letter_map[_word]
+            current_filters = _to_dict(valid_scenarios[idx].filters)
+            current_start = valid_scenarios[idx].start_period
+            current_end = valid_scenarios[idx].end_period
+            console.print(f"\n[bold cyan]AI:[/bold cyan]")
+            console.print(Markdown(
+                f"Hai scelto **Scenario {_word}: {valid_scenarios[idx].name}**.\n\n"
+                f"Periodo suggerito: {current_start}–{current_end}. Va bene o vuoi cambiarlo?\n\n"
+                + _fmt_scenario(valid_scenarios[idx], _word)
+            ))
+            console.print()
+            continue
+
+        # Simple confirmation — break with current (already validated) filters
+        if len(_words_lower) <= 3 and _confirm_words & set(_words_lower):
             break
 
-    # Ask AI for a final structured summary
-    final_text = _chat(
-        f"L'utente ha confermato. Elenca i filtri scelti per le dimensioni: {', '.join(dims_list)}. "
-        "Per ogni dimensione scrivi DIM=CODICE (usa stringa vuota se nessun filtro). "
-        "Poi spiega brevemente il motivo in una riga."
-    )
+        # Everything else → AI interprets and returns structured update
+        update_msg = (
+            f"{base_ctx}\n\n"
+            f"Proposed scenarios:\n{scenarios_summary}\n\n"
+            f"Current filters: {current_filters}\n"
+            f"Current period: {current_start}–{current_end}\n\n"
+            f"User says: '{user_input}'\n\n"
+            "Return the updated full filter set. "
+            "Keep dimensions not mentioned by the user unchanged from current filters. "
+            "Set confirmed=False — confirmation is handled separately."
+        )
 
-    class FilterItem(BaseModel):
-        dimension_id: str
-        codes: list[str]  # empty list = no filter; multiple = multi-value
+        update: FilterUpdate = _ai_structured(  # type: ignore[assignment]
+            update_msg, FilterUpdate, spinner="L'AI sta elaborando la tua risposta..."
+        )
 
-    class FilterResult(BaseModel):
-        filters: list[FilterItem]
-        reasoning: str
+        # Python validates
+        upd_dict = _to_dict(update.filters)  # type: ignore[union-attr]
+        ok, err = _validate(upd_dict)
+        if not ok:
+            fix_msg = (
+                f"{base_ctx}\n\n"
+                f"Proposed filters {upd_dict} are INVALID: {err}\n"
+                f"Current valid filters: {current_filters}\n"
+                "Fix only what is invalid and return a working filter set."
+            )
+            update = _ai_structured(fix_msg, FilterUpdate, spinner="Correzione filtri...")  # type: ignore[assignment]
+            upd_dict = _to_dict(update.filters)  # type: ignore[union-attr]
+            ok, err = _validate(upd_dict)
+            if not ok:
+                console.print(f"\n[yellow]⚠ Non riesco a trovare una combinazione valida: {err}[/yellow]")
+                console.print(Markdown(update.message))  # type: ignore[union-attr]
+                console.print()
+                continue
 
-    result = _structured_extract(
-        final_text,
-        FilterResult,
-        f"Estrai i filtri per le dimensioni ({', '.join(dims_list)}) e il reasoning. "
-        "Per ogni dimensione senza filtro usa codes=[]. "
-        "Se una dimensione ha più valori selezionati, mettili tutti in codes.",
-    )
+        current_filters = upd_dict
+        current_start = update.start_period or current_start  # type: ignore[union-attr]
+        current_end = update.end_period or current_end  # type: ignore[union-attr]
+
+        console.print("\n[bold cyan]AI:[/bold cyan]")
+        console.print(Markdown(update.message))  # type: ignore[union-attr]
+        console.print()
+
+        if update.confirmed:  # type: ignore[union-attr]
+            break
+
     return {
-        "filters": {item.dimension_id: item.codes for item in result.filters},
-        "reasoning": result.reasoning,
+        "filters": current_filters,
+        "start_period": current_start,
+        "end_period": current_end,
+        "reasoning": f"Guida interattiva per: {objective}",
     }
