@@ -2,6 +2,8 @@
 
 ## 2026-04-03
 
+- Feat: cache TTL configurabile via env vars (`OPENSDMX_DATAFLOWS_CACHE_TTL`, `OPENSDMX_METADATA_CACHE_TTL`, `OPENSDMX_CONSTRAINTS_CACHE_TTL`); default sensati, `.env.example` aggiunto
+- Feat: setup testing con pytest, primi test su `cache_config`
 - Feat: CLI agent-friendly — `guide --yes --dataset` (non-interactive, auto-download), `blacklist --remove`, fail-fast for missing embeddings, examples with default provider note in all `--help`
 
 ## 2026-04-02 (3)

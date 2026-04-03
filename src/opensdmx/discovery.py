@@ -14,7 +14,7 @@ import polars as pl
 from .base import get_agency_id, get_cache_dir, get_provider, sdmx_request_xml
 from .utils import get_name_by_lang, xml_attr_safe, xml_parse
 
-_CACHE_TTL = 86400.0  # 24 hours
+from .cache_config import DATAFLOWS_CACHE_TTL
 
 
 def _dataflow_cache_path():
@@ -26,7 +26,7 @@ def _load_cached_dataflows() -> pl.DataFrame | None:
     path = _dataflow_cache_path()
     if path.exists():
         age = time.time() - path.stat().st_mtime
-        if age < _CACHE_TTL:
+        if age < DATAFLOWS_CACHE_TTL:
             return pl.read_parquet(path)
     return None
 

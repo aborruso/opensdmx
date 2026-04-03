@@ -18,7 +18,7 @@ def _get_conn() -> sqlite3.Connection:
     return conn
 
 
-_TTL = 7 * 86400  # 7 days
+from .cache_config import CONSTRAINTS_CACHE_TTL, METADATA_CACHE_TTL
 
 
 def _ensure_db() -> None:
@@ -76,7 +76,7 @@ def get_cached_dims(structure_id: str) -> dict | None:
         ).fetchall()
     if not rows:
         return None
-    if time.time() - rows[0]["cached_at"] > _TTL:
+    if time.time() - rows[0]["cached_at"] > METADATA_CACHE_TTL:
         return None
     return {
         row["dimension_id"]: {
@@ -107,7 +107,7 @@ def is_codelist_info_cached(codelist_id: str) -> bool:
         ).fetchone()
     if row is None:
         return False
-    return time.time() - row["cached_at"] <= _TTL
+    return time.time() - row["cached_at"] <= METADATA_CACHE_TTL
 
 
 def get_cached_codelist_info(codelist_id: str) -> str | None:
@@ -137,7 +137,7 @@ def get_cached_codelist_values(codelist_id: str) -> list | None:
         ).fetchall()
     if not rows:
         return None
-    if time.time() - rows[0]["cached_at"] > _TTL:
+    if time.time() - rows[0]["cached_at"] > METADATA_CACHE_TTL:
         return None
     return [{"id": r["code_id"], "name": r["code_name"]} for r in rows]
 
@@ -161,7 +161,7 @@ def get_cached_available_constraints(df_id: str) -> dict | None:
         ).fetchall()
     if not rows:
         return None
-    if time.time() - rows[0]["cached_at"] > _TTL:
+    if time.time() - rows[0]["cached_at"] > CONSTRAINTS_CACHE_TTL:
         return None
     result: dict = {}
     for row in rows:
