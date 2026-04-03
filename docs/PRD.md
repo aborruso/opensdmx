@@ -2,7 +2,7 @@
 
 ## Overview
 
-opensdmx is a Python library and CLI for querying any SDMX 2.1 REST API. It provides a uniform interface to 8+ statistical providers (Eurostat, ISTAT, ECB, OECD, INSEE, Deutsche Bundesbank, World Bank, ABS) and supports AI-guided dataset discovery.
+opensdmx is a Python library and CLI for querying any SDMX 2.1 REST API. It provides a uniform interface to 8+ statistical providers (Eurostat, ISTAT, ECB, OECD, INSEE, Deutsche Bundesbank, World Bank, ABS).
 
 ---
 
@@ -23,7 +23,6 @@ Statistical data from international agencies is distributed via SDMX 2.1 REST AP
 - Provide a single Python API that works identically across all supported SDMX 2.1 providers.
 - Expose a CLI for non-programmatic workflows (download, plot, explore).
 - Enable semantic search over provider catalogs via Ollama embeddings.
-- Provide AI-guided filter selection using a multi-turn conversation with tool verification.
 - Cache all structural metadata to minimize API calls.
 
 ---
@@ -40,7 +39,7 @@ Statistical data from international agencies is distributed via SDMX 2.1 REST AP
 
 - Data analysts and researchers who use SDMX data from public statistical agencies.
 - Python developers integrating statistical data into pipelines or notebooks.
-- Non-technical users who use the CLI and `guide` command for exploratory analysis.
+- Non-technical users who use the CLI for exploratory analysis.
 
 ---
 
@@ -75,17 +74,6 @@ Statistical data from international agencies is distributed via SDMX 2.1 REST AP
 - Search by semantic similarity with optional LLM-based query expansion (`semantic_search()`).
 - Embeddings are stored per provider in `~/.cache/opensdmx/{AGENCY_ID}/embeddings.parquet`.
 
-### AI-guided discovery (`guide` command)
-
-- Accept a natural-language goal (any language).
-- Perform semantic search and present a paged, interactive dataset list.
-- Check dataset API availability before proceeding; add unavailable datasets to a blacklist.
-- Run a multi-turn AI conversation (Gemini 2.5 Flash via chatlas) with three tools: look up actual values, look up codelist descriptions, test a filter combination.
-- Validate AI-proposed filter codes against `availableconstraint`.
-- Validate the full filter combination with a live sample request.
-- Present the final SDMX URL, `curl` command, and `opensdmx get` CLI command.
-- Allow the user to download the result, modify filters, or start a new search.
-
 ### Blacklist management (`blacklist` command)
 
 - List datasets marked as unavailable.
@@ -115,7 +103,6 @@ Statistical data from international agencies is distributed via SDMX 2.1 REST AP
 | `opensdmx values <id> <dim>` | Show available values for a dimension |
 | `opensdmx get <id> [--DIM VALUE] [--out file]` | Download data |
 | `opensdmx plot <id> [--DIM VALUE] [--out file]` | Plot data as a line chart |
-| `opensdmx guide [query]` | AI-guided dataset discovery and filter selection |
 | `opensdmx blacklist` | Manage the unavailability blacklist |
 
 All commands accept `--provider` / `-p` to set the active provider.

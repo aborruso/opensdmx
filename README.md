@@ -139,7 +139,6 @@ All commands accept `--provider` (`-p`) to select the provider.
 | `opensdmx constraints <id> [dim] [-p provider]` | Show values actually present in the dataflow (via `availableconstraint`) |
 | `opensdmx get <id> [--DIM VALUE] [--start-period P] [--end-period P] [--last-n N] [--first-n N] [--out file] [-p provider]` | Download data (CSV/parquet/JSON) |
 | `opensdmx plot <id> [--DIM VALUE] [--out file] [-p provider]` | Plot data as line chart |
-| `opensdmx guide [query] [-p provider]` | AI-guided dataset discovery and filter selection |
 | `opensdmx blacklist [-p provider]` | List and remove datasets from the unavailability blacklist |
 
 ### Examples
@@ -158,9 +157,6 @@ opensdmx get 151_929 --provider istat --FREQ A --REF_AREA IT --out data.csv
 opensdmx search "GDP" --provider oecd
 opensdmx search "inflation" --provider ecb
 
-# AI-guided discovery
-opensdmx guide "youth unemployment in Europe"
-opensdmx guide --provider istat "disoccupazione giovanile"
 ```
 
 ### Semantic search setup

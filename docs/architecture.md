@@ -15,7 +15,7 @@ opensdmx is a Python package and CLI for querying any SDMX 2.1 REST API. It is o
 | `db_cache.py` | SQLite cache for dimensions, codelists, constraints, blacklist |
 | `embed.py` | Ollama embeddings for semantic search |
 | `ai.py` | AI-guided discovery session (chatlas + Gemini) |
-| `cli.py` | Typer CLI: search, info, values, get, plot, guide, embed, blacklist |
+| `cli.py` | Typer CLI: search, info, values, get, plot, embed, blacklist |
 | `__init__.py` | Public API surface — re-exports from the modules above |
 | `portals.json` | Bundled provider configuration file |
 
@@ -58,29 +58,6 @@ cli.py  search()
        └─ cosine similarity → top-N results
   2. all_available()                    → filter invalid datasets
   3. Print table with df_id, description, score
-```
-
-### Guide command flow
-
-```
-opensdmx guide "youth unemployment"
-         |
-         v
-cli.py  guide()
-  1. semantic_search(query, n=100)      → embed.py
-  2. Interactive dataset selection      → questionary (paged, 10/page)
-  3. load_dataset(selected_id)          → discovery.py
-  4. API availability check             → httpx GET with lastNObservations=1
-     └─ if fails: save_invalid_dataset() → db_cache.py, loop back
-  5. guide_session(ds, query)           → ai.py
-     └─ AI multi-turn with Gemini 2.5 Flash
-     └─ tool: lookup_actual_values      → get_available_values() → db_cache.py
-     └─ tool: lookup_dimension_values   → get_dimension_values() → db_cache.py
-     └─ tool: test_filter_combination   → live SDMX sample request
-  6. Filter validation
-     └─ check codes against availableconstraint
-     └─ sample request to verify combination produces data
-  7. Result panel: filters, reasoning, SDMX URL, curl command, CLI command
 ```
 
 ---

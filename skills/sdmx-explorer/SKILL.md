@@ -34,7 +34,7 @@ opensdmx --help                  # list all commands
 opensdmx search --help           # options and examples for search
 opensdmx constraints --help      # options and examples for constraints
 opensdmx get --help              # options and examples for get
-# ... same for info, values, embed, guide, blacklist, plot
+# ... same for info, values, constraints, embed, blacklist, plot
 ```
 
 This skill runs a four-phase interactive loop. Always follow the phases in order.
