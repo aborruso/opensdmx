@@ -1,6 +1,7 @@
 {
   "eurostat": {
     "name": "Eurostat",
+    "description": "Statistical office of the EU. Covers demographics, economy, employment, trade, agriculture and environment for 27 member states and associated countries. Primary source for European comparative statistics.",
     "base_url": "https://ec.europa.eu/eurostat/api/dissemination/sdmx/2.1",
     "agency_id": "ESTAT",
     "rate_limit": 0.5,
@@ -12,6 +13,7 @@
   },
   "istat": {
     "name": "ISTAT",
+    "description": "Italian National Institute of Statistics. Covers population, economy, employment, prices and social indicators for Italy. Main source for Italian official statistics.",
     "base_url": "https://esploradati.istat.it/SDMXWS/rest",
     "agency_id": "IT1",
     "rate_limit": 13.0,
@@ -19,23 +21,27 @@
   },
   "ecb": {
     "name": "European Central Bank",
+    "description": "ECB Statistical Data Warehouse. Covers monetary policy, banking supervision, exchange rates, balance of payments and financial statistics for the euro area.",
     "base_url": "https://data-api.ecb.europa.eu/service",
     "agency_id": "ECB"
   },
   "oecd": {
     "name": "OECD",
+    "description": "Organisation for Economic Co-operation and Development. Covers education, health, tax, trade, environment and social indicators across 38 member countries. Strong on cross-country comparisons.",
     "base_url": "https://sdmx.oecd.org/public/rest",
     "agency_id": "OECD",
     "catalog_agency": "all",
     "constraint_params": {}
   },
   "insee": {
-    "name": "INSEE (France)",
+    "name": "INSEE",
+    "description": "French National Institute of Statistics and Economic Studies. Covers French population, economy, employment, prices and social indicators via the BDM macro-economic time series database.",
     "base_url": "https://www.bdm.insee.fr/series/sdmx",
     "agency_id": "FR1"
   },
   "bundesbank": {
     "name": "Deutsche Bundesbank",
+    "description": "German central bank time series database. Covers monetary statistics, banking, financial markets, exchange rates and German macroeconomic indicators.",
     "base_url": "https://api.statistiken.bundesbank.de/rest",
     "agency_id": "BBK",
     "metadata_prefix": "metadata",
@@ -43,11 +49,13 @@
   },
   "worldbank": {
     "name": "World Bank",
+    "description": "World Development Indicators and other World Bank datasets. Covers 200+ countries with 1400+ indicators on development, poverty, health, education and environment.",
     "base_url": "https://api.worldbank.org/v2/sdmx/rest",
     "agency_id": "WB"
   },
   "abs": {
     "name": "Australian Bureau of Statistics",
+    "description": "Official Australian statistics. Covers population, economy, employment, trade, prices and environment for Australia and its territories.",
     "base_url": "https://data.api.abs.gov.au/rest",
     "agency_id": "ABS"
   }

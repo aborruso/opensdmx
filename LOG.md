@@ -1,5 +1,11 @@
 # LOG
 
+## 2026-04-04 (10)
+
+- chore: bump version to v0.2.8
+- feat: add `providers` command listing curated SDMX providers with alias, name, description, agency
+- feat: add `description` field to all 8 providers in portals.json
+
 ## 2026-04-04 (9)
 
 - chore: bump version to v0.2.7

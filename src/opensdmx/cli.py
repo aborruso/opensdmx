@@ -399,6 +399,43 @@ def embed(
         raise typer.Exit(1)
 
 
+@app.command()
+def providers():
+    """List built-in SDMX providers (alias, name, description).
+
+    These are curated examples — opensdmx works with any SDMX 2.1 REST endpoint.
+    Use --provider <URL> to connect to any provider not listed here.
+
+    Examples:
+
+      opensdmx providers
+      opensdmx search unemployment --provider ecb
+    """
+    from .base import PROVIDERS
+
+    console.print(
+        "\n[dim]The providers below are curated examples. "
+        "opensdmx works with any SDMX 2.1 REST endpoint — "
+        "use [/dim][cyan]--provider <URL>[/cyan][dim] to connect to any unlisted provider.[/dim]\n"
+    )
+
+    table = Table(show_lines=True)
+    table.add_column("alias", style="cyan", no_wrap=True)
+    table.add_column("name", no_wrap=True)
+    table.add_column("description")
+    table.add_column("agency", style="dim", no_wrap=True)
+
+    for alias, cfg in PROVIDERS.items():
+        table.add_row(
+            alias,
+            cfg.get("name", ""),
+            cfg.get("description", ""),
+            cfg.get("agency_id", ""),
+        )
+
+    console.print(table)
+
+
 _LARGE_DATASET_THRESHOLD = 5000
 
 
