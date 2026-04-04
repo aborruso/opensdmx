@@ -108,6 +108,22 @@ pages exist. Keep paginating until you find at least 3 plausible candidates or
 exhaust the results. Only after exhausting pagination should you try a different
 keyword or provider. Use `--all` only as a last resort (may produce very long output).
 
+**If keyword search returns 0 or very few results (< 3), offer semantic search:**
+
+> "I didn't find much with a keyword search. I can try a semantic search instead —
+> it matches by meaning, not exact words, so it can find datasets even when the
+> terminology differs. It requires Ollama to be running and is slower (10–30 s).
+> Want me to try?"
+
+If the user agrees:
+
+```bash
+opensdmx search --semantic "<query>"
+```
+
+Semantic search returns the top 20 results ranked by similarity score. Pick the
+most relevant candidates (score > 0.5) and continue with Step 1c as normal.
+
 ```bash
 # Example: verify age and sex are present
 opensdmx info UNE_RT_A       # ✓ has age, sex, geo → keep
