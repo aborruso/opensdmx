@@ -399,6 +399,9 @@ def embed(
         raise typer.Exit(1)
 
 
+_LARGE_DATASET_THRESHOLD = 5000
+
+
 @app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
 def get(
     ctx: typer.Context,
@@ -408,6 +411,7 @@ def get(
     end_period: Optional[str] = typer.Option(None, "--end-period", help="End period (e.g. 2023, 2023-Q4, 2023-12)"),
     last_n: Optional[int] = typer.Option(None, "--last-n", help="Return only last N observations per series"),
     first_n: Optional[int] = typer.Option(None, "--first-n", help="Return only first N observations per series"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip large-dataset confirmation prompt"),
     provider: Optional[str] = typer.Option(None, "--provider", "-p", help=_PROVIDER_HELP),
 ):
     """Get data for a dataset. Extra --DIM VALUE pairs are used as filters.
@@ -428,7 +432,7 @@ def get(
 
     try:
         import warnings as _warnings
-        with console.status("[dim]Fetching data...[/dim]"):
+        with console.status("[dim]Loading dataset...[/dim]"):
             ds = load_dataset(dataset_id)
             if filters:
                 with _warnings.catch_warnings(record=True) as _caught:
@@ -436,6 +440,23 @@ def get(
                     ds = set_filters(ds, **filters)
                 for _w in _caught:
                     err_console.print(f"[yellow]Warning:[/yellow] {_w.message}")
+
+        # Probe for large datasets when no last_n/first_n limit is set
+        if not last_n and not first_n and not yes:
+            try:
+                with console.status("[dim]Checking dataset size...[/dim]"):
+                    probe = get_data(ds, last_n_observations=1)
+                n_series = len(probe)
+                if n_series > _LARGE_DATASET_THRESHOLD:
+                    err_console.print(
+                        f"[yellow]Warning:[/yellow] this dataset has ~{n_series:,} series (no filters set).\n"
+                        f"Download may be large. Use [cyan]--last-n N[/cyan] to limit, or [cyan]--yes[/cyan] to proceed."
+                    )
+                    raise typer.Exit(1)
+            except httpx.HTTPStatusError:
+                pass  # let the real request fail with a proper error
+
+        with console.status("[dim]Fetching data...[/dim]"):
             df = get_data(ds, start_period=start_period, end_period=end_period,
                           last_n_observations=last_n, first_n_observations=first_n)
     except httpx.HTTPStatusError as e:

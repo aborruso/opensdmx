@@ -1,5 +1,11 @@
 # LOG
 
+## 2026-04-04 (3)
+
+- Feat: `get` warns when dataset has >5,000 series and no filters/limits are set
+- Feat: `get --yes` / `-y` flag to bypass large-dataset confirmation
+- Probe request (`lastNObservations=1`) used to count series before full download
+
 ## 2026-04-04 (2) — v0.2.5
 
 - Fix: Polars dtype crash on mixed TIME_PERIOD (e.g. ECB ICP) — force Utf8 in CSV read
