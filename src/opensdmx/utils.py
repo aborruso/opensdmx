@@ -20,9 +20,14 @@ def xml_parse(content: bytes):
     ns = {}
     for element in root.iter():
         for prefix, uri in element.nsmap.items():
-            if prefix is not None and uri not in ns.values():
+            if uri in ns.values():
+                continue
+            if prefix is not None:
                 canonical = _NS_CANONICAL.get(uri, prefix)
                 ns[canonical] = uri
+            elif uri in _NS_CANONICAL:
+                # default namespace (prefix=None) — include only if canonically known
+                ns[_NS_CANONICAL[uri]] = uri
     return root, ns
 
 

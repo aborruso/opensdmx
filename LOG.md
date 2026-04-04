@@ -1,5 +1,10 @@
 # LOG
 
+## 2026-04-04 (7)
+
+- fix(bundesbank): add datastructure_agency=BBK to portals.json (ALL not accepted by Bundesbank API)
+- fix(utils): handle default xmlns (prefix=None) in xml_parse() for known canonical namespaces — fixes World Bank WDI discovery
+
 ## 2026-04-04 (6)
 
 - fix(utils): xml_parse() now collects namespaces from all elements (not just root) — fixes World Bank support where `structure` ns is declared on a child element — closes #4
