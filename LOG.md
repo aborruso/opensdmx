@@ -1,5 +1,13 @@
 # LOG
 
+## 2026-04-04 (14)
+
+- chore: bump version to v0.3.2
+- feat: expose `run_query()`, `semantic_search()`, `build_embeddings()` in public Python API
+- docs: add `sdmx-explorer` skill installation guide (`docs/skill/README.md`) with screenshots
+- docs: add missing functions to Python API table in README
+- docs: improve docstrings for `semantic_search` and `build_embeddings`
+
 ## 2026-04-04 (13)
 
 - test: add test_cli.py with 12 tests for _parse_extra_filters, _apply_provider, CLI commands
