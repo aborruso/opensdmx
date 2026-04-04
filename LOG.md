@@ -2,6 +2,7 @@
 
 ## 2026-04-04 (14)
 
+- docs: expand semantic search section in README with comparison table, 3 real examples, and sample output
 - feat: add --all and --page to search command (paginate cache results)
 - chore: bump version to v0.3.2
 - feat: expose `run_query()`, `semantic_search()`, `build_embeddings()` in public Python API

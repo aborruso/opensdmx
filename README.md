@@ -253,7 +253,16 @@ opensdmx run unemployment_eu.yaml --out results.parquet
 
 Provider resolution order: `--provider` CLI flag → alias in YAML → `provider_url` + `agency_id` in YAML → environment variable. This means query files work with any provider, including custom URLs.
 
-### Semantic search setup
+### Semantic search
+
+`opensdmx search` has two modes:
+
+| Mode | How it works | Best for |
+|---|---|---|
+| Keyword (default) | Exact substring match on dataset title | When you know the right technical term |
+| `--semantic` | Embedding similarity via Ollama | When you don't know the exact wording, or want conceptually related datasets |
+
+#### Setup
 
 Requires [Ollama](https://ollama.com) with the `nomic-embed-text-v2-moe` model:
 
@@ -261,10 +270,64 @@ Requires [Ollama](https://ollama.com) with the `nomic-embed-text-v2-moe` model:
 ollama pull nomic-embed-text-v2-moe
 opensdmx embed              # build embeddings for default provider (eurostat)
 opensdmx embed -p istat     # build embeddings for ISTAT
-opensdmx search --semantic "unemployment"
 ```
 
-Tip: semantic search matches meaning, not exact words. Try synonyms or related terms for better results (e.g. "jobless" instead of "unemployment").
+#### Why semantic search matters
+
+The SDMX catalog uses technical terminology. The same concept can appear under many different labels, or under none of the words you'd naturally use. Semantic search bridges that gap.
+
+**Example 1 — synonym that keyword misses**
+
+`jobless` as a keyword returns 5 datasets (only those with "jobless" in the title). As a semantic query it returns 20 results ranked by relevance, including unemployment datasets — because the model knows "jobless" and "unemployed" are the same concept:
+
+```bash
+opensdmx search "jobless"            # 5 results — only datasets titled "jobless …"
+opensdmx search --semantic "jobless" # 20 results — unemployment datasets included, with score
+```
+
+**Example 2 — natural-language phrase that keyword can't match**
+
+`cost of living` returns zero results with keyword search (no dataset title contains that exact phrase). Semantic search finds 20 relevant datasets about housing costs, expenditure, and purchasing power:
+
+```bash
+opensdmx search "cost of living"            # 0 results
+opensdmx search --semantic "cost of living" # 20 results — housing cost overburden, social protection, etc.
+```
+
+**Example 3 — conceptual query**
+
+```bash
+opensdmx search "people without work"            # 0 results
+opensdmx search --semantic "people without work" # 20 results — unemployed persons, jobless households, labour force
+```
+
+**When keyword search is enough**
+
+When you already know the technical term, keyword search is faster and returns all matching datasets (not capped at 20). `search "unemployment"` returns 114 results; `search --semantic "unemployment"` returns the 20 most similar by score — useful to surface the most relevant ones quickly.
+
+**Rule of thumb:** start with a keyword search. If results are empty or off-target, switch to `--semantic`.
+
+```bash
+opensdmx search "unemployment"               # keyword: 114 matches
+opensdmx search --semantic "unemployment"    # semantic: top 20 by relevance score
+```
+
+```
+$ opensdmx search --semantic "unemployment"
+
+           Semantic search: unemployment
+┏━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━┓
+┃ df_id             ┃ df_description                           ┃ score ┃
+┡━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━┩
+│ MED_PS421         │ Unemployment rate                         │ 0.818 │
+│ TPS00203          │ Total unemployment rate                   │ 0.756 │
+│ LFSA_UGAD         │ Unemployed persons by duration of         │ 0.659 │
+│                   │ unemployment                              │       │
+│ MED_PS411         │ Employment                                │ 0.639 │
+│ TEPSR_WC170       │ Unemployment rate by age                  │ 0.632 │
+│ …                 │ …                                         │ …     │
+└───────────────────┴───────────────────────────────────────────┴───────┘
+```
 
 ### Caching
 
