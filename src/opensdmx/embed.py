@@ -45,7 +45,20 @@ def _embed(texts: list[str]) -> np.ndarray:
 
 
 def build_embeddings(progress: bool = True) -> None:
-    """Encode all catalog descriptions and save to the provider's cache directory."""
+    """Encode all catalog descriptions and save to the provider's cache directory.
+
+    Requires Ollama running locally with the ``nomic-embed-text-v2-moe`` model pulled.
+    Start Ollama with ``ollama serve`` and pull the model with
+    ``ollama pull nomic-embed-text-v2-moe`` before calling this function.
+    Must be re-run whenever the provider changes or new datasets are available.
+
+    Args:
+        progress: if True, print progress messages (default: True)
+
+    Raises:
+        RuntimeError: if Ollama is not reachable or the model is not available
+        RuntimeError: if no datasets are found for the current provider
+    """
     from .discovery import all_available
 
     _check_ollama()
@@ -75,7 +88,21 @@ def build_embeddings(progress: bool = True) -> None:
 
 
 def semantic_search(query: str, n: int = 10) -> pl.DataFrame:
-    """Return top-N datasets by semantic similarity to query."""
+    """Return top-N datasets by semantic similarity to a natural-language query.
+
+    Requires Ollama running locally and embeddings built with :func:`build_embeddings`.
+
+    Args:
+        query: natural-language query (e.g. ``"unemployment by country"``).
+        n: number of results to return (default: 10).
+
+    Returns:
+        Polars DataFrame with columns ``df_id``, ``df_description``, ``score`` (cosine similarity).
+
+    Raises:
+        RuntimeError: if Ollama is not reachable or the model is not available.
+        FileNotFoundError: if the embeddings cache does not exist (run :func:`build_embeddings` first).
+    """
     from .discovery import all_available
 
     _check_ollama()

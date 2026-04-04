@@ -122,6 +122,9 @@ opensdmx get MYDATASET
 | `reset_filters(ds)` | Reset all filters to `"."` (all) |
 | `get_data(ds, ...)` | Retrieve data → Polars DataFrame |
 | `fetch(id, ..., **filters)` | One-liner: load dataset + set filters + get data |
+| `run_query(query_file)` | Run a query from a YAML file saved with `--query-file` → Polars DataFrame |
+| `semantic_search(query, n)` | Semantic search via Ollama embeddings → Polars DataFrame (requires `build_embeddings` first) |
+| `build_embeddings(progress)` | Build and cache Ollama embeddings for all datasets (requires Ollama + `nomic-embed-text-v2-moe`) |
 | `set_timeout(seconds)` | Get/set API timeout (default: 300 s) |
 | `parse_time_period(series)` | Convert SDMX time strings to dates |
 
