@@ -13,7 +13,8 @@ from .discovery import (
     search_dataset,
     set_filters,
 )
-from .retrieval import fetch, get_data, parse_time_period
+from .retrieval import fetch, get_data, parse_time_period, run_query
+from .embed import build_embeddings, semantic_search
 from .cli import main
 
 __all__ = [
@@ -31,6 +32,9 @@ __all__ = [
     "reset_filters",
     "get_data",
     "fetch",
+    "run_query",
+    "build_embeddings",
+    "semantic_search",
     "set_timeout",
     "parse_time_period",
     "main",

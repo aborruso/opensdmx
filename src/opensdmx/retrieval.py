@@ -105,6 +105,51 @@ def get_data(
     return data
 
 
+def run_query(query_file: str) -> pl.DataFrame:
+    """Run a query from a YAML file saved with `opensdmx get --query-file`.
+
+    Args:
+        query_file: path to the YAML query file
+
+    Returns:
+        Polars DataFrame
+    """
+    import yaml
+    from pathlib import Path
+    from .base import PROVIDERS, set_provider
+
+    path = Path(query_file)
+    if not path.exists():
+        raise FileNotFoundError(f"Query file not found: {path}")
+
+    with open(path) as fh:
+        q = yaml.safe_load(fh)
+
+    alias = q.get("provider")
+    if alias and alias in PROVIDERS:
+        set_provider(alias)
+    elif q.get("provider_url"):
+        set_provider(q["provider_url"], agency_id=q.get("agency_id") or None)
+
+    dataset_id = q.get("dataset")
+    if not dataset_id:
+        raise ValueError("'dataset' field missing in query file")
+
+    filters = {dim: info["value"] for dim, info in (q.get("filters") or {}).items()}
+
+    ds = load_dataset(dataset_id)
+    if filters:
+        ds = set_filters(ds, **filters)
+
+    return get_data(
+        ds,
+        start_period=q.get("start_period"),
+        end_period=q.get("end_period"),
+        last_n_observations=q.get("last_n"),
+        first_n_observations=q.get("first_n"),
+    )
+
+
 def fetch(
     dataflow_id: str,
     start_period: str | None = None,
