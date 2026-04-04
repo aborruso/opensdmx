@@ -301,33 +301,20 @@ opensdmx search "people without work"            # 0 results
 opensdmx search --semantic "people without work" # 20 results — unemployed persons, jobless households, labour force
 ```
 
+| df_id | df_description | score |
+|---|---|---|
+| LFSO_17SENEES | Self-employed persons without employees by main reason for not having employees | 0.569 |
+| LFSA_UGAN | Unemployed persons by citizenship | 0.559 |
+| LFSA_UGPIS | Unemployed persons by previous occupation | 0.549 |
+| LFSA_UGATES | Unemployed persons by type of employment sought | 0.544 |
+| LFSA_IGAWW | Persons outside the labour force not seeking employment by willingness to work | 0.544 |
+| … | … | … |
+
 **When keyword search is enough**
 
 When you already know the technical term, keyword search is faster and returns all matching datasets (not capped at 20). `search "unemployment"` returns 114 results; `search --semantic "unemployment"` returns the 20 most similar by score — useful to surface the most relevant ones quickly.
 
 **Rule of thumb:** start with a keyword search. If results are empty or off-target, switch to `--semantic`.
-
-```bash
-opensdmx search "unemployment"               # keyword: 114 matches
-opensdmx search --semantic "unemployment"    # semantic: top 20 by relevance score
-```
-
-```
-$ opensdmx search --semantic "unemployment"
-
-           Semantic search: unemployment
-┏━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━┓
-┃ df_id             ┃ df_description                           ┃ score ┃
-┡━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━┩
-│ MED_PS421         │ Unemployment rate                         │ 0.818 │
-│ TPS00203          │ Total unemployment rate                   │ 0.756 │
-│ LFSA_UGAD         │ Unemployed persons by duration of         │ 0.659 │
-│                   │ unemployment                              │       │
-│ MED_PS411         │ Employment                                │ 0.639 │
-│ TEPSR_WC170       │ Unemployment rate by age                  │ 0.632 │
-│ …                 │ …                                         │ …     │
-└───────────────────┴───────────────────────────────────────────┴───────┘
-```
 
 ### Caching
 
