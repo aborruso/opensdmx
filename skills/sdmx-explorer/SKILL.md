@@ -394,16 +394,19 @@ If the user says yes to **metadata**:
 
 If the user says yes to **README**:
 - Generate a `README.md` in the same folder as the data file.
-- Include:
-  - Dataset name and ID
-  - Provider and source URL (the curl URL from Step 2)
-  - Last update timestamp (from the `LAST UPDATE` column in the data)
-  - Column descriptions: for each column in the CSV, explain what it contains
-  - Dimension tables: for each dimension, list codes and labels (from constraints
-    or the metadata file if already generated)
-  - Flag legend: list all `OBS_FLAG` values found in the data with their meaning
-  - Units: clearly state the unit of measurement for `OBS_VALUE`
-  - Any caveats noted during analysis (gaps, estimated values, provisional data)
+- The goal is to make the output **verifiable** (check values against the source),
+  **evaluable** (judge quality and scope), and **repeatable** (reproduce from scratch).
+- Follow the full template in [references/readme-template.md](references/readme-template.md).
+  In summary, include:
+  - Files produced (table)
+  - One section per source dataflow: ID, provider, filters with labels, unit,
+    last update date, and the exact download URL
+  - Derivations: join keys, filters applied after download, computed columns
+    with explicit formulas (not prose)
+  - Column schema: name, type, description, unit for every column in the output
+  - Flag legend: only flags actually present in the data, with row counts
+  - Coverage table when geographic or categorical gaps exist
+  - Caveats: scope limitations, reporting lags, known biases
 
 ### Step 6 — Visualization
 
