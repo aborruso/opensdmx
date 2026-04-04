@@ -2,6 +2,7 @@
 
 ## 2026-04-04 (13)
 
+- test: add test_cli.py with 12 tests for _parse_extra_filters, _apply_provider, CLI commands
 - fix: World Bank provider now works for data requests (closes #5)
   - add `data_accept` field in portals.json → sends correct Accept header for SDMX-JSON
   - add `data_path_suffix: "/"` → trailing slash required by WB API to avoid 307 redirect

@@ -3,14 +3,20 @@ name: sdmx-explorer
 description: >
   Guided, interactive exploration of statistical data via SDMX providers
   (Eurostat, OECD, ECB, World Bank, ISTAT, and others) using the opensdmx CLI.
-  Use this skill whenever the user asks a question about statistics that could
-  be answered with SDMX data: demographics, economy, employment, births, deaths,
-  population, prices, trade, health, agriculture, or any other topic.
-  Also use it when the user mentions a specific dataflow ID they want to explore.
-  The skill guides the user step by step: discovers relevant datasets, proposes
-  the most meaningful candidates, explores the schema using real constraints
-  (not codelists), explains the dataset structure, and invites the user to make
-  informed filter choices before fetching any data.
+  Use this skill whenever the user asks ANY question about statistics or data
+  that could be answered with SDMX data — even if they don't mention SDMX,
+  Eurostat, or any provider by name. Topics include demographics, economy,
+  employment, births, deaths, population, prices, trade, health, agriculture,
+  GDP, inflation, unemployment, fertility rates, migration, energy, education,
+  poverty, housing, and any other statistical topic. Also use it when the user
+  mentions a specific dataflow ID they want to explore. Trigger this skill even
+  for implicit questions like "how many births were there in Italy last year?"
+  or "I need EU unemployment data by age group" — these clearly need SDMX data
+  even if the user doesn't say so. The skill guides the user step by step:
+  discovers relevant datasets, proposes the most meaningful candidates, explores
+  the schema using real constraints (not codelists), explains the dataset
+  structure, and invites the user to make informed filter choices before
+  fetching any data.
 license: MIT
 compatibility: >
   Requires the opensdmx CLI (opensdmx search, info, constraints, values, get, plot).
@@ -371,7 +377,7 @@ If the user says yes to **README**:
   - Units: clearly state the unit of measurement for `OBS_VALUE`
   - Any caveats noted during analysis (gaps, estimated values, provisional data)
 
-### Step 5 — Visualization
+### Step 6 — Visualization
 
 After downloading data, offer to create charts using `opensdmx plot`.
 The plot command uses plotnine (Python's ggplot2) and accepts both dataflow IDs
@@ -447,7 +453,34 @@ explain the ones that are populated. Skip columns that are entirely empty.
 | Eurostat | **Default provider** (no `--provider` flag needed); dimension flags are lowercase (`--geo`, `--coicop`); country codes: ISO 3166-1 alpha-2 + EU aggregates like `EU27_2020` |
 | OECD | Use `--provider oecd`; good for international comparisons |
 | ECB | Use `--provider ecb`; financial and monetary data |
-| World Bank | Use `--provider worldbank`; development indicators |
+| World Bank | Use `--provider worldbank`; **single-dataflow architecture** — all 1400+ indicators live inside one dataflow called `WDI`; do NOT use `opensdmx search` to find indicators (it only returns `WDI`); use `opensdmx values WDI SERIES --provider worldbank \| grep -i <topic>` to find indicator codes; `availableconstraint` is not supported (returns 400) — skip `opensdmx constraints` and use `opensdmx values` directly; country codes are ISO 3166-1 **alpha-3** (`USA`, `DEU`, `ITA`, not `US`/`DE`/`IT`); **NOTE**: data requests currently fail with HTTP 401/307 due to a known bug (see GitHub issue #5) — as a workaround, suggest equivalent OECD datasets for macro/GDP indicators |
+
+**World Bank flow (different from all other providers)**
+
+World Bank exposes a single dataflow `WDI` containing all indicators. The exploration
+flow is different — do NOT follow the standard Phase 1 search:
+
+```bash
+# Step 1 — find the indicator code (replaces opensdmx search)
+opensdmx values WDI SERIES --provider worldbank 2>&1 | grep -i "gdp per capita"
+# → NY_GDP_PCAP_KD  (constant USD), NY_GDP_PCAP_PP_KD  (PPP), etc.
+
+# Step 2 — get structure
+opensdmx info WDI --provider worldbank
+# → 3 dimensions: FREQ · SERIES · REF_AREA
+
+# Step 3 — find country codes (alpha-3, not alpha-2)
+opensdmx values WDI REF_AREA --provider worldbank 2>&1 | grep -i "italy\|germany"
+# → ITA, DEU (not IT, DE)
+
+# Step 4 — build query (skip constraints — endpoint returns 400)
+opensdmx get WDI --provider worldbank --SERIES NY_GDP_PCAP_KD \
+  --REF_AREA ITA+DEU+FRA --start-period 2000
+```
+
+If data retrieval fails with HTTP 401/307 (known bug, issue #5), offer the equivalent
+OECD dataset as a workaround — OECD publishes most macro indicators (GDP, employment,
+prices) with comparable coverage.
 
 **Territory resolution (Eurostat)**
 Country codes follow ISO 3166-1 alpha-2: `IT` (Italy), `DE` (Germany), `FR` (France),

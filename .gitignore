@@ -27,3 +27,6 @@ tmp.md
 openspec/
 .github/skills/openspec-*/
 .github/prompts/opsx-*
+
+# Skill workspaces (local only)
+skills/*-workspace/
