@@ -58,12 +58,10 @@ def set_provider(
     if name_or_url in PROVIDERS:
         _active_provider = name_or_url
     else:
-        if agency_id is None:
-            raise ValueError("agency_id is required when using a custom base URL")
         _active_provider = {
             **_DEFAULTS,
             "base_url": name_or_url.rstrip("/"),
-            "agency_id": agency_id,
+            "agency_id": agency_id or "",
             "rate_limit": rate_limit,
             "language": language,
         }
@@ -130,7 +128,8 @@ def _rate_limit_check() -> None:
                     remaining = end_time - time.time()
                     if remaining <= 0:
                         break
-                    sys.stderr.write(f"\r{label} ({remaining:.0f}s)...  ")
+                    remaining_str = "< 1s" if remaining < 1 else f"{remaining:.0f}s"
+                    sys.stderr.write(f"\r{label} ({remaining_str})...  ")
                     sys.stderr.flush()
                     time.sleep(0.2)
                 sys.stderr.write("\n")
@@ -178,4 +177,4 @@ def sdmx_request_csv(path: str, **params):
         resp = sdmx_request(path, accept="application/xml", format=fmt, **params)
     else:
         resp = sdmx_request(path, accept="text/csv", **params)
-    return pl.read_csv(io.BytesIO(resp.content), infer_schema_length=10000)
+    return pl.read_csv(io.BytesIO(resp.content), infer_schema_length=10000, schema_overrides={"TIME_PERIOD": pl.Utf8})

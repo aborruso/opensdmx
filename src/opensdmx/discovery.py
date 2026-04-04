@@ -266,11 +266,14 @@ def dimensions_info(dataset: dict, include_descriptions: bool = True) -> pl.Data
 
 def get_dimension_values(dataset: dict, dimension_id: str) -> pl.DataFrame:
     """Return available values (id, name) for a specific dimension."""
-    if dimension_id not in dataset["dimensions"]:
+    dim_upper = {k.upper(): k for k in dataset["dimensions"]}
+    actual = dim_upper.get(dimension_id.upper())
+    if actual is None:
         avail = ", ".join(dataset["dimensions"].keys())
         raise ValueError(
             f"Dimension '{dimension_id}' not found. Available: {avail}"
         )
+    dimension_id = actual
 
     codelist_id = dataset["dimensions"][dimension_id]["codelist_id"]
     if not codelist_id:

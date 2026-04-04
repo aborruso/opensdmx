@@ -207,6 +207,8 @@ def list_invalid_datasets() -> list[dict]:
     return [dict(row) for row in rows]
 
 
-def delete_invalid_dataset(df_id: str) -> None:
+def delete_invalid_dataset(df_id: str) -> bool:
+    """Delete a dataset from the blacklist. Returns True if it existed."""
     with _get_conn_ready() as conn:
-        conn.execute("DELETE FROM invalid_datasets WHERE df_id = ?", (df_id,))
+        cur = conn.execute("DELETE FROM invalid_datasets WHERE df_id = ?", (df_id,))
+        return cur.rowcount > 0

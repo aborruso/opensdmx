@@ -16,7 +16,7 @@ from rich.table import Table
 
 from .base import get_base_url, get_provider
 
-app = typer.Typer(help="opensdmx — SDMX 2.1 REST API CLI")
+app = typer.Typer(help="opensdmx — SDMX 2.1 REST API CLI\n\nEnv vars: OPENSDMX_PROVIDER (provider name or URL), OPENSDMX_AGENCY (agency ID for custom URLs)")
 console = Console()
 err_console = Console(stderr=True)
 
@@ -27,7 +27,7 @@ def _version_callback(value: bool) -> None:
         console.print(version("opensdmx"))
         raise typer.Exit()
 
-_PROVIDER_HELP = "Provider name ('eurostat', 'istat') or custom base URL"
+_PROVIDER_HELP = "Provider name ('eurostat', 'ecb') or custom base URL. Env: OPENSDMX_PROVIDER"
 
 
 def _parse_extra_filters(ctx: typer.Context) -> dict:
@@ -53,10 +53,17 @@ def _parse_extra_filters(ctx: typer.Context) -> dict:
 
 
 def _apply_provider(provider: str | None) -> None:
-    """Call set_provider if a provider option was given."""
-    if provider:
-        from .base import set_provider
-        set_provider(provider)
+    """Set active provider from CLI option or OPENSDMX_PROVIDER env var."""
+    import os
+    resolved = provider or os.environ.get("OPENSDMX_PROVIDER")
+    if resolved:
+        from .base import PROVIDERS, set_provider
+        if resolved not in PROVIDERS and not resolved.startswith("http"):
+            valid = ", ".join(sorted(PROVIDERS))
+            err_console.print(f"[red]Error:[/red] unknown provider '{resolved}'. Valid: {valid}")
+            raise typer.Exit(1)
+        agency_id = os.environ.get("OPENSDMX_AGENCY")
+        set_provider(resolved, agency_id=agency_id)
 
 
 def _check_api_reachable() -> None:
@@ -94,7 +101,7 @@ def _startup(
 def search(
     keyword: str = typer.Argument(..., help="Keyword to search in dataset descriptions"),
     semantic: bool = typer.Option(False, "--semantic", "-s", help="Use semantic search via Ollama embeddings"),
-    n: int = typer.Option(10, "--n", help="Number of results (semantic mode only)"),
+    n: int = typer.Option(20, "--n", help="Max number of results to show"),
     provider: Optional[str] = typer.Option(None, "--provider", "-p", help=_PROVIDER_HELP),
 ):
     """Search datasets by keyword (or semantically with --semantic).
@@ -107,6 +114,7 @@ def search(
     Examples:
 
       opensdmx search unemployment
+      opensdmx search unemployment --n 5
       opensdmx search --semantic disoccupazione --n 5
       opensdmx search population --provider istat
     """
@@ -149,7 +157,10 @@ def search(
         err_console.print(f"[yellow]No datasets found for:[/yellow] {keyword}")
         raise typer.Exit(0)
 
-    table = Table(title=f"Search: {keyword}", show_lines=False)
+    total = len(df)
+    df = df.head(n)
+    title = f"Search: {keyword} ({len(df)} of {total})" if total > n else f"Search: {keyword} ({total})"
+    table = Table(title=title, show_lines=False)
     table.add_column("df_id", style="cyan", no_wrap=True)
     table.add_column("df_description")
 
@@ -416,10 +427,15 @@ def get(
     filters = _parse_extra_filters(ctx)
 
     try:
+        import warnings as _warnings
         with console.status("[dim]Fetching data...[/dim]"):
             ds = load_dataset(dataset_id)
             if filters:
-                ds = set_filters(ds, **filters)
+                with _warnings.catch_warnings(record=True) as _caught:
+                    _warnings.simplefilter("always")
+                    ds = set_filters(ds, **filters)
+                for _w in _caught:
+                    err_console.print(f"[yellow]Warning:[/yellow] {_w.message}")
             df = get_data(ds, start_period=start_period, end_period=end_period,
                           last_n_observations=last_n, first_n_observations=first_n)
     except httpx.HTTPStatusError as e:
@@ -439,8 +455,11 @@ def get(
             df.write_parquet(out)
         elif suffix == ".json":
             df.write_ndjson(out)
-        else:
+        elif suffix == ".csv":
             df.write_csv(out)
+        else:
+            err_console.print(f"[red]Error:[/red] unsupported output format '{suffix}'. Supported: .csv, .parquet, .json")
+            raise typer.Exit(1)
         console.print(f"[green]Saved:[/green] {out}")
 
 
@@ -451,11 +470,11 @@ def plot(
     x: str = typer.Option("TIME_PERIOD", "--x", help="Column for X axis"),
     y: str = typer.Option("OBS_VALUE", "--y", help="Column for Y axis"),
     color: Optional[str] = typer.Option(None, "--color", help="Column for color grouping"),
-    geom: str = typer.Option("line", "--geom", help="Chart type: line, bar, barh, point"),
+    geom: str = typer.Option("line", "--geom", help="Chart type: line, bar, barh, point, scatter"),
     title: Optional[str] = typer.Option(None, "--title", help="Chart title (default: dataset description)"),
     xlabel: Optional[str] = typer.Option(None, "--xlabel", help="X axis label (default: column name)"),
     ylabel: Optional[str] = typer.Option(None, "--ylabel", help="Y axis label (default: column name)"),
-    out: Path = typer.Option(Path("chart.png"), "--out", help="Output file (.png/.pdf/.svg)"),
+    out: Optional[Path] = typer.Option(None, "--out", help="Output file (.png/.pdf/.svg) — default: <dataset_id>.png"),
     width: float = typer.Option(10.0, "--width", help="Chart width in inches"),
     height: float = typer.Option(5.0, "--height", help="Chart height in inches"),
     start_period: Optional[str] = typer.Option(None, "--start-period", help="Start period (e.g. 2020, 2020-Q1, 2020-01)"),
@@ -490,7 +509,7 @@ def plot(
                 df = pl.read_parquet(input_path)
             else:
                 separator = "\t" if input_path.suffix.lower() == ".tsv" else ","
-                df = pl.read_csv(input_path, separator=separator, infer_schema_length=10000)
+                df = pl.read_csv(input_path, separator=separator, infer_schema_length=10000, schema_overrides={"TIME_PERIOD": pl.Utf8})
             ds_description = input_path.stem
         except Exception as e:
             err_console.print(f"[red]Error reading file:[/red] {e}")
@@ -522,10 +541,17 @@ def plot(
         raise typer.Exit(1)
 
     df = df.with_columns(pl.col(y).cast(pl.Float64, strict=False))
+    if df[x].dtype == pl.Utf8:
+        from .retrieval import parse_time_period
+        parsed = parse_time_period(df[x])
+        if parsed.drop_nulls().len() > 0:
+            df = df.with_columns(parsed.alias(x))
     pdf = df.to_pandas()
 
+    if geom == "scatter":
+        geom = "point"
     if geom not in ("line", "bar", "barh", "point"):
-        err_console.print(f"[red]Error:[/red] unknown --geom '{geom}'. Use: line, bar, barh, point")
+        err_console.print(f"[red]Error:[/red] unknown --geom '{geom}'. Use: line, bar, barh, point, scatter")
         raise typer.Exit(1)
 
     if geom in ("bar", "barh"):
@@ -572,6 +598,10 @@ def plot(
         if hasattr(pdf[x], "dt"):
             p = p + scale_x_date(date_breaks="2 years", date_labels="%Y")
 
+    if out is None:
+        import re
+        safe_name = re.sub(r"[^\w\-]", "_", ds_description.lower()).strip("_")
+        out = Path(f"{safe_name}.png")
     p.save(str(out), dpi=150, width=width, height=height)
     console.print(f"[green]Saved:[/green] {out}")
 
@@ -986,8 +1016,10 @@ def blacklist(
     # Non-interactive remove via --remove flag
     if remove:
         for df_id in remove:
-            delete_invalid_dataset(df_id)
-            console.print(f"[green]Removed:[/green] {df_id}")
+            if delete_invalid_dataset(df_id):
+                console.print(f"[green]Removed:[/green] {df_id}")
+            else:
+                err_console.print(f"[yellow]Not found in blacklist:[/yellow] {df_id}")
         return
 
     entries = list_invalid_datasets()

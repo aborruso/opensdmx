@@ -124,8 +124,14 @@ def test_save_and_list_invalid():
 
 def test_delete_invalid():
     db_cache.save_invalid_dataset("TO_DELETE")
-    db_cache.delete_invalid_dataset("TO_DELETE")
+    result = db_cache.delete_invalid_dataset("TO_DELETE")
+    assert result is True
     assert "TO_DELETE" not in db_cache.get_invalid_dataset_ids()
+
+
+def test_delete_invalid_nonexistent():
+    result = db_cache.delete_invalid_dataset("DOES_NOT_EXIST")
+    assert result is False
 
 
 def test_invalid_empty():

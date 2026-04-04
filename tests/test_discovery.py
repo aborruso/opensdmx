@@ -5,7 +5,7 @@ from __future__ import annotations
 import warnings
 
 import pytest
-from opensdmx.discovery import reset_filters, set_filters
+from opensdmx.discovery import get_dimension_values, reset_filters, set_filters
 
 
 def _make_dataset(**dims) -> dict:
@@ -63,6 +63,26 @@ def test_set_filters_unknown_dimension_warns():
         assert len(w) == 1
         assert "NONEXISTENT" in str(w[0].message)
     assert "NONEXISTENT" not in result["filters"]
+
+
+# ── get_dimension_values ─────────────────────────────────────────────
+
+def test_get_dimension_values_case_insensitive():
+    """get_dimension_values should accept dimension IDs regardless of case."""
+    ds = _make_dataset(FREQ=0, GEO=1)
+    # Add a codelist_id so it doesn't fail on missing codelist
+    ds["dimensions"]["FREQ"]["codelist_id"] = None
+    # Should raise ValueError for unknown dim, not for wrong case
+    with pytest.raises(ValueError, match="not found"):
+        get_dimension_values(ds, "NONEXISTENT")
+    # Wrong case should NOT raise — it resolves to the actual key
+    with pytest.raises(ValueError, match="not found"):
+        get_dimension_values(ds, "NONEXISTENT_DIM")
+    # Lowercase of existing dim should not raise ValueError
+    try:
+        get_dimension_values(ds, "freq")
+    except ValueError as e:
+        pytest.fail(f"get_dimension_values raised ValueError for 'freq': {e}")
 
 
 # ── reset_filters ────────────────────────────────────────────────────

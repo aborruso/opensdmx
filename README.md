@@ -67,11 +67,34 @@ opensdmx.set_provider("oecd")
 opensdmx.set_provider("ecb")
 opensdmx.set_provider("worldbank")
 
-# Custom provider
+# Custom provider (agency_id optional)
+opensdmx.set_provider("https://mysdmx.org/rest")
 opensdmx.set_provider("https://mysdmx.org/rest", agency_id="XYZ", rate_limit=1.0)
 
 # Check active provider
 opensdmx.get_provider()  # returns dict with base_url, agency_id, rate_limit, language
+```
+
+> **Note on output columns:** Eurostat uses the compact `SDMX-CSV` format (dimensions + `TIME_PERIOD` + `OBS_VALUE`). Other providers (ECB, OECD, etc.) return the generic `text/csv` format, which includes additional series metadata columns (`TITLE`, `UNIT`, `DECIMALS`, etc.). This is expected behavior — filter columns with standard tools if needed.
+
+### Provider via CLI and environment variables
+
+Use `--provider` (or `-p`) on any command, or set `OPENSDMX_PROVIDER` once for the whole session:
+
+```bash
+# Per-command
+opensdmx search "inflation" --provider ecb
+opensdmx get EXR --provider https://data-api.ecb.europa.eu/service --FREQ D
+
+# Session-wide via env var
+export OPENSDMX_PROVIDER=ecb
+opensdmx search "inflation"
+opensdmx get EXR --FREQ D --CURRENCY USD
+
+# Custom URL with agency
+export OPENSDMX_PROVIDER=https://mysdmx.org/rest
+export OPENSDMX_AGENCY=XYZ
+opensdmx get MYDATASET
 ```
 
 ## Python API
@@ -136,14 +159,14 @@ All commands accept `--provider` (`-p`) to select the provider.
 
 | Command | Description |
 |---|---|
-| `opensdmx search <keyword> [-p provider]` | Keyword search in dataset descriptions |
-| `opensdmx search --semantic <query>` | Semantic search (requires `opensdmx embed`) |
+| `opensdmx search <keyword> [--n N] [-p provider]` | Keyword search in dataset descriptions (default: 20 results) |
+| `opensdmx search --semantic <query> [--n N]` | Semantic search (requires `opensdmx embed`) |
 | `opensdmx embed [-p provider]` | Build semantic embeddings cache via Ollama |
 | `opensdmx info <id> [-p provider]` | Show dataset metadata and dimensions |
-| `opensdmx values <id> <dim> [-p provider]` | Show codelist values for a dimension |
+| `opensdmx values <id> <dim> [-p provider]` | Show codelist values for a dimension (case-insensitive) |
 | `opensdmx constraints <id> [dim] [-p provider]` | Show values actually present in the dataflow (via `availableconstraint`) |
-| `opensdmx get <id> [--DIM VALUE] [--start-period P] [--end-period P] [--last-n N] [--first-n N] [--out file] [-p provider]` | Download data (CSV/parquet/JSON) |
-| `opensdmx plot <id> [--DIM VALUE] [--out file] [-p provider]` | Plot data as line chart |
+| `opensdmx get <id> [--DIM VALUE] [--start-period P] [--end-period P] [--last-n N] [--first-n N] [--out file.csv\|.parquet\|.json] [-p provider]` | Download data |
+| `opensdmx plot <id\|file.csv> [--DIM VALUE] [--geom line\|bar\|barh\|point\|scatter] [--out file] [-p provider]` | Plot data as chart |
 | `opensdmx blacklist [-p provider]` | List and remove datasets from the unavailability blacklist |
 
 ### Examples
@@ -151,17 +174,21 @@ All commands accept `--provider` (`-p`) to select the provider.
 ```bash
 # Eurostat (default)
 opensdmx search "unemployment"
+opensdmx search "unemployment" --n 5
 opensdmx info une_rt_m
+opensdmx values une_rt_m FREQ          # case-insensitive: freq works too
 opensdmx constraints une_rt_m
 opensdmx constraints une_rt_m geo
 opensdmx get une_rt_m --freq M --geo IT --out data.csv
+opensdmx get une_rt_m --freq M --geo IT --out data.parquet
+opensdmx plot une_rt_m --freq M --geo IT --geom line
+opensdmx plot data.csv --geom scatter --x TIME_PERIOD --y OBS_VALUE
 
 # Other providers
 opensdmx search "disoccupazione" --provider istat
 opensdmx get 151_929 --provider istat --FREQ A --REF_AREA IT --out data.csv
 opensdmx search "GDP" --provider oecd
 opensdmx search "inflation" --provider ecb
-
 ```
 
 ### Semantic search setup
@@ -187,13 +214,15 @@ Cache is namespaced per provider under `~/.cache/opensdmx/{AGENCY_ID}/`.
 | `cache.db` — structures + codelists | Dimensions, codelist descriptions and values | 30 days |
 | `cache.db` — constraints | Available constraint values per dataflow | 7 days |
 
-TTL values can be overridden via environment variables:
+Environment variables:
 
-| Variable | Default | Duration |
-|---|---|---|
-| `OPENSDMX_DATAFLOWS_CACHE_TTL` | `604800` | 7 days |
-| `OPENSDMX_METADATA_CACHE_TTL` | `2592000` | 30 days |
-| `OPENSDMX_CONSTRAINTS_CACHE_TTL` | `604800` | 7 days |
+| Variable | Description |
+|---|---|
+| `OPENSDMX_PROVIDER` | Provider name or custom base URL (session-wide default) |
+| `OPENSDMX_AGENCY` | Agency ID for custom URL providers |
+| `OPENSDMX_DATAFLOWS_CACHE_TTL` | Dataset catalog TTL in seconds (default: `604800` — 7 days) |
+| `OPENSDMX_METADATA_CACHE_TTL` | Structure/codelist TTL in seconds (default: `2592000` — 30 days) |
+| `OPENSDMX_CONSTRAINTS_CACHE_TTL` | Constraints TTL in seconds (default: `604800` — 7 days) |
 
 See `.env.example` for a ready-to-use template.
 

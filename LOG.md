@@ -1,5 +1,31 @@
 # LOG
 
+## 2026-04-04 (2) — v0.2.5
+
+- Fix: Polars dtype crash on mixed TIME_PERIOD (e.g. ECB ICP) — force Utf8 in CSV read
+- Fix: `--out` with unsupported extension (e.g. `.xlsx`) now raises clear error instead of silent wrong write
+- Fix: `--geom scatter` accepted as alias for `point` in `plot`
+- Fix: invalid `--provider` name shows clean error with list of valid providers
+- Fix: dimension ID in `values` and `get` is now case-insensitive (e.g. `FREQ` = `freq`)
+- Fix: `UserWarning` for unknown dimension replaced with rich console warning
+- Fix: `blacklist --remove` reports "Not found" when entry doesn't exist (was always "Removed")
+- Fix: `search --n` now works in keyword mode too (was semantic-only)
+- Fix: default plot filename now uses dataset ID/stem instead of `chart.png`
+- Fix: local CSV plot: TIME_PERIOD parsed as date so `scale_x_date` applies correctly
+- Feat: `OPENSDMX_PROVIDER` and `OPENSDMX_AGENCY` env vars for session-wide provider config
+- Feat: custom SDMX URL accepted as `--provider` value (`agency_id` now optional)
+- Feat: `search` shows total match count in table title (e.g. "10 of 8037")
+- Feat: `search --n` default raised from 10 to 20
+- Tests: 57 → 64 tests (new: `test_base.py`, extended `test_db_cache`, `test_discovery`)
+- Docs: README updated — providers, env vars, output formats, examples
+
+## 2026-04-04
+
+- ECB deep test: P1 URL bug (get without filters) NOT reproduced — resolved or was dataset-specific
+- ECB deep test: P1 duplicates in `values` NOT reproduced — resolved
+- New bug found: `get ICP --provider ecb` crashes with Polars dtype inference error on YYYY-MM TIME_PERIOD
+- Results documented in `tmp/ecb-test-results.md`, evaluation updated in `tmp/cli-evaluation.md`
+
 ## 2026-04-03 (4)
 
 - Fix: CI workflow — add ruff to dev dependencies, fix f-string and F401 lint errors
