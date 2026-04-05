@@ -9,7 +9,8 @@
     "dataflow_params": {"detail": "allstubs", "references": "none"},
     "constraint_endpoint": "contentconstraint",
     "datastructure_agency": "ESTAT",
-    "data_format_param": "SDMX-CSV"
+    "data_format_param": "SDMX-CSV",
+    "dataflow_page_url": "https://ec.europa.eu/eurostat/databrowser/product/page/{dataflow_id}"
   },
   "istat": {
     "name": "ISTAT",

@@ -2,6 +2,11 @@
 
 ## 2026-04-05
 
+- feat(info): show Eurostat dataflow page URL in `opensdmx info` output (table and JSON mode)
+- feat(portals): add `dataflow_page_url` field to Eurostat entry in portals.json
+
+## 2026-04-05
+
 - feat(plot): `--facet` / `--ncol` options for `facet_wrap` (small multiples)
 - feat(plot): `--time` alias for `--x` (more intuitive column name override)
 - fix(plot): `schema_overrides` now uses the actual `--x` column name instead of hardcoded `TIME_PERIOD`

@@ -281,6 +281,11 @@ def info(
         err_console.print(f"[yellow]Warning:[/yellow] could not fetch dimension info: {e}")
         dim_df = None
 
+    from .base import get_provider as _get_provider
+    _provider_cfg = _get_provider()
+    _page_url_tpl = _provider_cfg.get("dataflow_page_url")
+    _page_url = _page_url_tpl.format(dataflow_id=ds["df_id"]) if _page_url_tpl else None
+
     if _output_mode != "table":
         dims = []
         if dim_df is not None and not dim_df.is_empty():
@@ -300,6 +305,8 @@ def info(
             "df_structure_id": ds["df_structure_id"],
             "dimensions": dims,
         }
+        if _page_url:
+            data["page_url"] = _page_url
         _emit(data)
         return
 
@@ -309,6 +316,8 @@ def info(
         f"Description: {ds['df_description']}\n"
         f"Structure:   {ds['df_structure_id']}"
     )
+    if _page_url:
+        meta += f"\nPage:        {_page_url}"
     console.print(Panel(meta, title="Dataset Info", expand=False))
 
     if dim_df is None or dim_df.is_empty():
