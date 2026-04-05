@@ -44,6 +44,22 @@ opensdmx run --help              # options and examples for run
 # ... same for info, values, constraints, embed, blacklist, plot
 ```
 
+All metadata commands (`search`, `info`, `values`, `constraints`, `providers`) support
+a global `--output` flag for structured output. Use it when you need to parse results
+programmatically instead of reading a Rich table:
+
+```bash
+opensdmx --output json search "unemployment" --n 10
+opensdmx --output json info TIPSUN20
+opensdmx --output json constraints TIPSUN20
+opensdmx --output json values TIPSUN20 geo
+opensdmx --output json providers
+opensdmx --output csv values TIPSUN20 geo   # CSV for tabular use
+```
+
+In `--output json` mode: stdout is pure JSON, stderr carries errors/warnings, spinners
+are suppressed. Pipe directly into `jq` or parse in Python.
+
 This skill runs a four-phase interactive loop. Always follow the phases in order.
 The goal is to help the user understand the data landscape and make informed choices,
 not to fetch data immediately.
@@ -96,17 +112,20 @@ Then run `opensdmx info <id>` on each one **in parallel** to check their dimensi
 list. Keep only the candidates that contain **all expected dimensions**.
 Discard candidates missing a required dimension — even if the title looks right.
 
-**If page 1 (20 results) yields no strong candidates**, paginate before giving up:
+**If page 1 (50 results) yields no strong candidates**, paginate before giving up:
 
 ```bash
-opensdmx search "unemployment" --page 2   # results 21-40
-opensdmx search "unemployment" --page 3   # results 41-60
+opensdmx search "unemployment" --page 2   # results 51-100
+opensdmx search "unemployment" --page 3   # results 101-150
 ```
 
-The title shows the total available (e.g. `21-40 of 114`), so you know how many
+The title shows the total available (e.g. `51-100 of 114`), so you know how many
 pages exist. Keep paginating until you find at least 3 plausible candidates or
 exhaust the results. Only after exhausting pagination should you try a different
 keyword or provider. Use `--all` only as a last resort (may produce very long output).
+
+Results are ranked by relevance score (id match, start-of-description, occurrence count) —
+the most relevant candidates appear first.
 
 **If keyword search returns 0 or very few results (< 3), offer semantic search:**
 
