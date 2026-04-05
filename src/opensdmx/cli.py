@@ -766,7 +766,7 @@ def run(
 def plot(
     ctx: typer.Context,
     dataset_id: str = typer.Argument(..., help="Dataset ID"),
-    x: str = typer.Option("TIME_PERIOD", "--x", help="Column for X axis"),
+    x: str = typer.Option("TIME_PERIOD", "--x", "--time", help="Column for X axis (default: TIME_PERIOD)"),
     y: str = typer.Option("OBS_VALUE", "--y", help="Column for Y axis"),
     color: Optional[str] = typer.Option(None, "--color", help="Column for color grouping"),
     geom: str = typer.Option("line", "--geom", help="Chart type: line, bar, barh, point, scatter"),
@@ -776,6 +776,8 @@ def plot(
     out: Optional[Path] = typer.Option(None, "--out", help="Output file (.png/.pdf/.svg) — default: <dataset_id>.png"),
     width: float = typer.Option(10.0, "--width", help="Chart width in inches"),
     height: float = typer.Option(5.0, "--height", help="Chart height in inches"),
+    facet: Optional[str] = typer.Option(None, "--facet", help="Column for facet_wrap (small multiples)"),
+    ncol: Optional[int] = typer.Option(None, "--ncol", help="Number of columns in facet grid (default: auto)"),
     start_period: Optional[str] = typer.Option(None, "--start-period", help="Start period (e.g. 2020, 2020-Q1, 2020-01)"),
     end_period: Optional[str] = typer.Option(None, "--end-period", help="End period (e.g. 2023, 2023-Q4, 2023-12)"),
     provider: Optional[str] = typer.Option(None, "--provider", "-p", help=_PROVIDER_HELP),
@@ -792,10 +794,11 @@ def plot(
       opensdmx plot /tmp/data.csv --color geo --title "Road deaths"
       opensdmx plot /tmp/ranking.csv --geom barh --x geo --title "Rate by country"
       opensdmx plot /tmp/data.csv --geom bar --x year --color geo
+      opensdmx plot /tmp/data.csv --color sex --facet age --ncol 2
     """
     import matplotlib
     matplotlib.use("Agg")
-    from plotnine import aes, coord_flip, geom_col, geom_line, geom_point, ggplot, labs, scale_x_date, theme_minimal
+    from plotnine import aes, coord_flip, facet_wrap, geom_col, geom_line, geom_point, ggplot, labs, scale_x_date, theme_minimal
 
     import polars as pl
 
@@ -808,7 +811,7 @@ def plot(
                 df = pl.read_parquet(input_path)
             else:
                 separator = "\t" if input_path.suffix.lower() == ".tsv" else ","
-                df = pl.read_csv(input_path, separator=separator, infer_schema_length=10000, schema_overrides={"TIME_PERIOD": pl.Utf8})
+                df = pl.read_csv(input_path, separator=separator, infer_schema_length=10000, schema_overrides={x: pl.Utf8})
             ds_description = input_path.stem
         except Exception as e:
             err_console.print(f"[red]Error reading file:[/red] {e}")
@@ -834,8 +837,11 @@ def plot(
             err_console.print(f"[red]Error:[/red] {e}")
             raise typer.Exit(1)
 
-    if x not in df.columns or y not in df.columns:
-        err_console.print(f"[red]Error:[/red] columns '{x}' or '{y}' not found in data.")
+    missing = [col for col in (x, y) if col not in df.columns]
+    if facet and facet not in df.columns:
+        missing.append(facet)
+    if missing:
+        err_console.print(f"[red]Error:[/red] column(s) not found in data: {', '.join(f'{chr(39)}{c}{chr(39)}' for c in missing)}")
         err_console.print(f"Available columns: {', '.join(df.columns)}")
         raise typer.Exit(1)
 
@@ -896,6 +902,9 @@ def plot(
         ) + theme_minimal()
         if hasattr(pdf[x], "dt"):
             p = p + scale_x_date(date_breaks="2 years", date_labels="%Y")
+
+    if facet:
+        p = p + facet_wrap(facet, ncol=ncol)
 
     if out is None:
         import re

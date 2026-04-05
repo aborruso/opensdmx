@@ -2,6 +2,14 @@
 
 ## 2026-04-05
 
+- feat(plot): `--facet` / `--ncol` options for `facet_wrap` (small multiples)
+- feat(plot): `--time` alias for `--x` (more intuitive column name override)
+- fix(plot): `schema_overrides` now uses the actual `--x` column name instead of hardcoded `TIME_PERIOD`
+- fix(plot): error message now lists only the missing column(s) instead of both
+- docs(skill): update visualization.md with facet options and small-multiples guidance
+
+## 2026-04-05
+
 - feat: machine-to-machine output — global `--output table|json|csv` flag on all metadata commands (`search`, `info`, `values`, `constraints`, `providers`); stdout = pure structured data, stderr = errors/warnings; spinners suppressed in non-table mode
 - feat: relevance ranking for standard search — multi-token AND filter on `df_description` + `df_id`, synthetic score (id match ×3, start-of-desc ×2, occurrence count ×1), results sorted by score
 - feat: search default page size 20→50

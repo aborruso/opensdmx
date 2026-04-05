@@ -16,10 +16,10 @@ The built-in `opensdmx plot` command supports three chart types via `--geom`:
 | `barh`   | Horizontal bar chart   | Rankings, sorted comparisons      | Bars auto-sorted by value (ascending)        |
 | `point`  | Scatter plot           | Correlations between two variables| Uses `geom_point` only, no connecting lines  |
 
-For other chart types — heatmaps, faceted plots, grouped (dodge) bars — write a
-short Python script using plotnine directly. plotnine supports the full Grammar of
-Graphics: `geom_bar`, `geom_col`, `geom_tile`, `geom_boxplot`, `facet_wrap`,
-`facet_grid`, `coord_flip`, `position_dodge`, custom scales, and themes.
+For other chart types — heatmaps, grouped (dodge) bars — write a short Python
+script using plotnine directly. plotnine supports the full Grammar of Graphics:
+`geom_bar`, `geom_col`, `geom_tile`, `geom_boxplot`, `facet_grid`,
+`coord_flip`, `position_dodge`, custom scales, and themes.
 
 ## Command reference
 
@@ -35,19 +35,60 @@ opensdmx plot une_rt_m --freq M --geo IT+DE --color geo --out /tmp/chart.png
 
 ### Options
 
-| Option           | Default        | Description                              |
-|------------------|----------------|------------------------------------------|
-| `--x`            | `TIME_PERIOD`  | Column mapped to x-axis                  |
-| `--y`            | `OBS_VALUE`    | Column mapped to y-axis                  |
-| `--color`        | (none)         | Column mapped to color aesthetic (groups) |
-| `--title`        | dataset name   | Chart title                              |
-| `--xlabel`       | column name    | X-axis label                             |
-| `--ylabel`       | column name    | Y-axis label                             |
-| `--out`          | `chart.png`    | Output file (.png, .pdf, .svg)           |
-| `--width`        | `10`           | Width in inches                          |
-| `--height`       | `5`            | Height in inches                         |
-| `--start-period` | (none)         | Start period filter (dataflow mode only) |
-| `--end-period`   | (none)         | End period filter (dataflow mode only)   |
+| Option           | Default        | Description                                        |
+|------------------|----------------|----------------------------------------------------|
+| `--x` / `--time` | `TIME_PERIOD` | Column mapped to x-axis (alias `--time` also works) |
+| `--y`            | `OBS_VALUE`    | Column mapped to y-axis                            |
+| `--color`        | (none)         | Column mapped to color aesthetic (groups)          |
+| `--facet`        | (none)         | Column for `facet_wrap` (small multiples)          |
+| `--ncol`         | auto           | Number of columns in the facet grid                |
+| `--title`        | dataset name   | Chart title                                        |
+| `--xlabel`       | column name    | X-axis label                                       |
+| `--ylabel`       | column name    | Y-axis label                                       |
+| `--out`          | `chart.png`    | Output file (.png, .pdf, .svg)                     |
+| `--width`        | `10`           | Width in inches                                    |
+| `--height`       | `5`            | Height in inches                                   |
+| `--start-period` | (none)         | Start period filter (dataflow mode only)           |
+| `--end-period`   | (none)         | End period filter (dataflow mode only)             |
+
+## Faceted charts (small multiples)
+
+Use `--facet <column>` to split the chart into one panel per value of that column.
+This is the most effective way to compare patterns across many groups without
+overloading a single chart with too many lines.
+
+```bash
+# Unemployment trend by country, one panel per country
+opensdmx plot /tmp/data.csv \
+  --time year --y OBS_VALUE --color sex \
+  --facet geo --ncol 4 \
+  --width 14 --height 7 \
+  --out /tmp/facets.png
+```
+
+**When to use facets:**
+
+| Situation | Approach |
+|-----------|----------|
+| > 8 countries/groups, trend comparison | `--facet geo --ncol 4` |
+| Two categories to cross (e.g. sex × age) | prepare `group_key` column, use `--color` for one, `--facet` for the other |
+| One variable has 2–4 meaningful levels | `--facet <var> --ncol 2` |
+
+**Data preparation for facets:**
+- Create a `group_key` column in DuckDB when you need to combine two variables for grouping (plotnine `group` aesthetic):
+
+```bash
+duckdb -c "
+COPY (
+  SELECT geo, year, OBS_VALUE, sex, age,
+         sex || '_' || age AS group_key
+  FROM read_csv('/tmp/data.csv')
+) TO '/tmp/data_facet.csv' (HEADER, DELIMITER ',');
+"
+```
+
+- Keep max 6–8 series per panel (use `--color` for one variable, `--facet` for another).
+- Adjust `--width` and `--height` — faceted charts need more space (e.g. `--width 14 --height 8`).
 
 ## Data preparation before plotting
 
