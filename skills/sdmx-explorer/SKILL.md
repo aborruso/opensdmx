@@ -468,6 +468,18 @@ When presenting dataflow candidates, reason about each one: explain why it might
 might not answer the question, what its limitations are, and which one you'd recommend.
 The user should feel guided, not overwhelmed.
 
+**Make filter choices coherent with the user's intent**
+Match the granularity of each dimension to what the user actually asked for.
+For any dimension, SDMX codelists typically contain both **individual units** and
+**aggregate codes** that group them. These two levels must never be mixed silently.
+
+The rule: when the user asks for "all X", return individual-level codes only.
+If aggregates exist in the data, exclude them — or present them separately with an
+explicit label explaining that they are groupings, not individual units.
+
+If an aggregate is useful as a reference (e.g. a total or average alongside individual
+values), propose it explicitly and let the user decide whether to include it.
+
 **Explain dimensions in plain language**
 Translate SDMX dimension IDs into human concepts:
 - `CITIZENSHIP_MOTHER` → "mother's citizenship"

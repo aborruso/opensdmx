@@ -142,10 +142,17 @@ COPY (
 "
 ```
 
-### Rule 3: Remove aggregates from comparative charts
+### Rule 3: Never mix individual units with their aggregates
 
-EU27 or OECD totals dwarf individual countries. Either show them separately
-or exclude them from country comparisons.
+SDMX codelists typically contain both individual-level codes and aggregate codes that
+group them. Mixing the two in the same chart distorts the visual comparison — aggregates
+often dwarf individual units or create misleading overlaps.
+
+For any dimension (geo, age, education level, sector, etc.): if the user asked for
+individual units, exclude aggregate codes from the chart. If an aggregate is useful
+as a reference line or benchmark, add it as a visually distinct element (e.g. dashed
+line, different color) with an explicit label that clarifies it is a grouping, not an
+individual unit.
 
 ### Rule 4: Use year strings for annual data
 
@@ -164,6 +171,51 @@ COPY (
 ```
 
 Then plot with `--x year` instead of `--x TIME_PERIOD`.
+
+### Rule 5: Replace codes with human-readable labels
+
+**Never show raw SDMX codes in a chart.** A reader unfamiliar with the data cannot
+be expected to know that `EL` is Greece, `ED7` is a master's degree, or `F` is Female.
+Always join the dimension codes with their labels before plotting.
+
+**How to get labels:**
+
+```bash
+# Get geo labels from Eurostat constraints
+opensdmx --output csv constraints <dataflow_id> geo > /tmp/geo_labels.csv
+
+# Or from the full codelist
+opensdmx --output csv values <dataflow_id> geo > /tmp/geo_labels.csv
+```
+
+**How to join in DuckDB and replace codes:**
+
+```bash
+duckdb -c "
+COPY (
+  SELECT
+    g.name AS country,   -- human-readable name instead of 'geo' code
+    strftime(d.TIME_PERIOD, '%Y') AS year,
+    d.OBS_VALUE
+  FROM read_csv('/tmp/data.csv') d
+  JOIN read_csv('/tmp/geo_labels.csv') g ON d.geo = g.id
+  ORDER BY country, year
+) TO '/tmp/data_labeled.csv' (HEADER, DELIMITER ',');
+"
+```
+
+Then plot with `--x country` (or `--color country`) instead of `--x geo`.
+
+Apply this to **every dimension** shown in the chart — geo, isced11, sex, age, unit, etc.
+If a label is very long, shorten it in the DuckDB query:
+
+```bash
+-- Shorten long labels
+CASE g.name
+  WHEN 'European Union - 27 countries (from 2020)' THEN 'EU27'
+  ELSE g.name
+END AS country
+```
 
 ## Iterative chart quality loop
 
@@ -198,6 +250,7 @@ Common problems and fixes:
 | Scattered points          | Multiple values per x-position   | Check for duplicate dimensions; add more filters          |
 | Title says "OBS_VALUE"    | Default labels used              | Set `--title`, `--ylabel`, `--xlabel` explicitly          |
 | X-axis labels overlap     | Many categories or long strings  | Use `--geom barh` (flips to horizontal); or in Python: `theme(axis_text_x=element_text(angle=90, hjust=1))` |
+| Codes shown instead of names | Raw SDMX codes (`EL`, `ED7`, `F`) not replaced | Join with labels via `opensdmx --output csv constraints` + DuckDB JOIN (see Rule 5) |
 
 ### 3. Present to user
 
