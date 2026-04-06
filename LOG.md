@@ -1,5 +1,9 @@
 # LOG
 
+## 2026-04-06 (3)
+
+- chore: bump version to v0.3.10
+
 ## 2026-04-06 (2)
 
 - feat(cache): flexible cache directory — `OPENSDMX_CACHE_DIR` env var, `platformdirs` (XDG on Linux, OS-native on macOS/Windows), `/tmp/opensdmx-{user}` fallback if nothing is writable (closes #6)
