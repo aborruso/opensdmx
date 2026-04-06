@@ -9,14 +9,12 @@ description: >
   employment, births, deaths, population, prices, trade, health, agriculture,
   GDP, inflation, unemployment, fertility rates, migration, energy, education,
   poverty, housing, and any other statistical topic. Also use it when the user
-  mentions a specific dataflow ID they want to explore. Trigger this skill even
-  for implicit questions like "how many births were there in Italy last year?"
-  or "I need EU unemployment data by age group" — these clearly need SDMX data
-  even if the user doesn't say so. The skill guides the user step by step:
-  discovers relevant datasets, proposes the most meaningful candidates, explores
-  the schema using real constraints (not codelists), explains the dataset
-  structure, and invites the user to make informed filter choices before
-  fetching any data.
+  mentions a specific dataflow ID. Trigger for implicit questions like
+  "how many births were there in Italy last year?" or "I need EU unemployment
+  data by age group". Guides the user step by step: discovers datasets, proposes
+  the most meaningful candidates, explores the schema using real constraints
+  (not codelists), explains the dataset structure, and invites the user to make
+  informed filter choices before fetching any data.
 license: MIT
 compatibility: >
   Requires the opensdmx CLI (opensdmx search, info, constraints, values, get, plot).
