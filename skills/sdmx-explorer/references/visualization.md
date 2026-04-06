@@ -13,7 +13,7 @@ The built-in `opensdmx plot` command supports three chart types via `--geom`:
 |----------|------------------------|-----------------------------------|----------------------------------------------|
 | `line`   | Line chart with points | Time series comparisons           | Default. Uses `geom_line` + `geom_point`     |
 | `bar`    | Vertical bar chart     | Comparing categories over time    | With `--color` produces stacked bars         |
-| `barh`   | Horizontal bar chart   | Rankings, sorted comparisons      | Bars auto-sorted by value (ascending)        |
+| `barh`   | Horizontal bar chart   | Rankings, sorted comparisons      | Bars auto-sorted by value (ascending). **Axis swap**: `--x` = numeric value (horizontal), `--y` = category (vertical) |
 | `point`  | Scatter plot           | Correlations between two variables| Uses `geom_point` only, no connecting lines  |
 
 Use `--facet <column>` + `--ncol <n>` for small multiples (one panel per value).
@@ -41,8 +41,8 @@ opensdmx plot une_rt_m --freq M --geo IT+DE --color geo --out /tmp/chart.png
 
 | Option           | Default        | Description                                        |
 |------------------|----------------|----------------------------------------------------|
-| `--x` / `--time` | `TIME_PERIOD` | Column mapped to x-axis (alias `--time` also works) |
-| `--y`            | `OBS_VALUE`    | Column mapped to y-axis                            |
+| `--x` / `--time` | `TIME_PERIOD` | Column mapped to x-axis (alias `--time` also works). For `--geom barh`: the **numeric value** column (horizontal axis) |
+| `--y`            | `OBS_VALUE`    | Column mapped to y-axis. For `--geom barh`: the **category** column (vertical axis)                            |
 | `--color`        | (none)         | Column mapped to color aesthetic (groups)          |
 | `--facet`        | (none)         | Column for `facet_wrap` (small multiples)          |
 | `--ncol`         | auto           | Number of columns in the facet grid                |

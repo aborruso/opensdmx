@@ -824,7 +824,10 @@ def plot(
                 df = pl.read_parquet(input_path)
             else:
                 separator = "\t" if input_path.suffix.lower() == ".tsv" else ","
-                df = pl.read_csv(input_path, separator=separator, infer_schema_length=10000, schema_overrides={x: pl.Utf8})
+                # For barh: x is the numeric value, y is the category string — override y as Utf8.
+                # For all other geoms: x is the category/time axis — override x as Utf8.
+                str_col = y if geom == "barh" else x
+                df = pl.read_csv(input_path, separator=separator, infer_schema_length=10000, schema_overrides={str_col: pl.Utf8})
             ds_description = input_path.stem
         except Exception as e:
             err_console.print(f"[red]Error reading file:[/red] {e}")
@@ -858,7 +861,9 @@ def plot(
         err_console.print(f"Available columns: {', '.join(df.columns)}")
         raise typer.Exit(1)
 
-    df = df.with_columns(pl.col(y).cast(pl.Float64, strict=False))
+    # For barh: x is the numeric value column; for all other geoms: y is the numeric value column.
+    value_col = x if geom == "barh" else y
+    df = df.with_columns(pl.col(value_col).cast(pl.Float64, strict=False))
     if df[x].dtype == pl.Utf8:
         from .retrieval import parse_time_period
         parsed = parse_time_period(df[x])
@@ -875,25 +880,31 @@ def plot(
     if geom in ("bar", "barh"):
         import pandas as pd
 
-        # Convert numeric or datetime x column to plain string to avoid axis misinterpretation
-        if pd.api.types.is_numeric_dtype(pdf[x]):
-            pdf[x] = pdf[x].astype(str)
-        elif pd.api.types.is_datetime64_any_dtype(pdf[x]):
-            pdf[x] = pdf[x].dt.year.astype(str)
+        # For bar (vertical): x is the category axis — convert to string to avoid misinterpretation.
+        # For barh (horizontal): x is the numeric value axis — leave it as-is.
+        if geom == "bar":
+            if pd.api.types.is_numeric_dtype(pdf[x]):
+                pdf[x] = pdf[x].astype(str)
+            elif pd.api.types.is_datetime64_any_dtype(pdf[x]):
+                pdf[x] = pdf[x].dt.year.astype(str)
 
         # Sort categories by value for readable bar charts
         if geom == "barh":
-            order = pdf.groupby(x)[y].sum().sort_values().index.tolist()
-            pdf[x] = pd.Categorical(pdf[x], categories=order, ordered=True)
+            # For barh: --x is the numeric value, --y is the category.
+            # geom_col + coord_flip needs aes(x=category, y=value), so swap.
+            order = pdf.groupby(y)[x].sum().sort_values().index.tolist()
+            pdf[y] = pd.Categorical(pdf[y], categories=order, ordered=True)
             if color:
-                aes_mapping = aes(x=x, y=y, fill=color)
+                aes_mapping = aes(x=y, y=x, fill=color)
             else:
-                aes_mapping = aes(x=x, y=y)
+                aes_mapping = aes(x=y, y=x)
             p = ggplot(pdf, aes_mapping) + geom_col() + coord_flip()
+            # After coord_flip: labs(x) appears on vertical axis, labs(y) on horizontal.
+            # User's --y (category) should label the vertical axis; --x (value) the horizontal.
             p = p + labs(
                 title=title or ds_description,
-                x=xlabel or x,
-                y=ylabel or y,
+                x=ylabel or y,
+                y=xlabel or x,
             )
         else:
             if color:

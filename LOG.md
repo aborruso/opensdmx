@@ -1,5 +1,10 @@
 # LOG
 
+## 2026-04-06 (5)
+
+- fix(plot): `--geom barh` now renders correctly — fixed axis swap (`--x` = value, `--y` = category), prevented numeric value column from being cast to string, and corrected axis labels after `coord_flip`
+- docs(skill): update visualization.md — document `barh` axis convention (`--x` = value, `--y` = category)
+
 ## 2026-04-06 (4)
 
 - docs(skill): human-readable labels required in charts (Rule 5 in visualization.md)
