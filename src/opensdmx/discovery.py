@@ -192,7 +192,10 @@ def _get_dimensions(structure_id: str) -> dict:
         ((k, v) for k, v in dims.items() if v["position"] is not None),
         key=lambda item: item[1]["position"]
     ))
-    save_dims(structure_id, result)
+    try:
+        save_dims(structure_id, result)
+    except Exception as e:
+        warnings.warn(f"Could not cache dimension metadata: {e}", stacklevel=2)
     return result
 
 
@@ -213,7 +216,10 @@ def _get_dimension_description(codelist_id: str | None) -> str | None:
         description = get_name_by_lang(codelist_node, "en", ns) if codelist_node is not None else None
     except (httpx.HTTPError, OSError):
         description = None
-    save_codelist_info(codelist_id, description)
+    try:
+        save_codelist_info(codelist_id, description)
+    except Exception as e:
+        warnings.warn(f"Could not cache codelist info: {e}", stacklevel=2)
     return description
 
 
@@ -342,7 +348,10 @@ def get_dimension_values(dataset: dict, dimension_id: str) -> pl.DataFrame:
             "name": get_name_by_lang(code_node, "en", ns),
         })
 
-    save_codelist_values(codelist_id, records)
+    try:
+        save_codelist_values(codelist_id, records)
+    except Exception as e:
+        warnings.warn(f"Could not cache codelist values: {e}", stacklevel=2)
     return pl.DataFrame(records, schema={"id": pl.Utf8, "name": pl.Utf8})
 
 
@@ -388,15 +397,19 @@ def get_available_values(dataset: dict) -> dict[str, pl.DataFrame]:
                 if values:
                     result[dim_id] = values
 
-        save_available_constraints(df_id, result)
-        return {dim_id: pl.DataFrame({"id": codes}) for dim_id, codes in result.items()}
-
     except Exception as e:
         import httpx
         if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 500:
             raise ConstraintsUnavailable(df_id) from e
         warnings.warn(f"Could not retrieve available values: {e}", stacklevel=2)
         return {}
+
+    try:
+        save_available_constraints(df_id, result)
+    except Exception as e:
+        warnings.warn(f"Could not cache constraint values: {e}", stacklevel=2)
+
+    return {dim_id: pl.DataFrame({"id": codes}) for dim_id, codes in result.items()}
 
 
 def set_filters(dataset: dict, **kwargs) -> dict:

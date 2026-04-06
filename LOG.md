@@ -1,5 +1,11 @@
 # LOG
 
+## 2026-04-06
+
+- fix(cache): all SQLite `save_*` calls wrapped in isolated try/except — cache failures no longer discard successfully fetched API data
+- fix(values): `opensdmx values` no longer fails with "readonly database" when cache write fails; returns data anyway
+- fix(constraints): `opensdmx constraints` warning message now distinguishes cache errors from API errors
+
 ## 2026-04-05
 
 - feat(plot): add `--rotate-x N` flag to rotate x-axis labels by N degrees
