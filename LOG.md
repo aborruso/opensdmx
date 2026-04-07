@@ -1,5 +1,9 @@
 # LOG
 
+## 2026-04-07 (11)
+
+- chore: bump version to v0.3.20
+
 ## 2026-04-07 (10)
 
 - feat(cli): add --grep flag to `values` and `constraints` commands — filters codelist/constraint results by regex (case-insensitive, matches id or name)
