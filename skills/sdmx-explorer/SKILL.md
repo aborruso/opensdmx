@@ -457,6 +457,22 @@ Key points:
 
 ## Key principles
 
+**Always explain the indicator — never assume prior knowledge**
+After presenting any results, always include a plain-language explanation of the
+key indicator(s) used. Do not assume the user knows what GNI, PPP, HICP, or any
+other acronym means. For every indicator shown:
+- State in one sentence what it measures
+- Explain how it differs from similar concepts the user might know (e.g. GNI vs GDP)
+- Clarify the unit and any methodological choice that affects interpretation
+  (e.g. "Atlas method" vs PPP, constant vs current USD)
+
+This applies even when the indicator name seems obvious. A user who asks
+"which are the poorest countries?" may not know what GNI is, even if they
+implicitly agree with using it as a proxy for poverty.
+
+Place this explanation immediately after the data summary, before any offer
+to download or visualize.
+
 **Constraints vs codelists — always use constraints**
 Use `opensdmx constraints` to get codes actually present in the data.
 `opensdmx values` returns the full codelist (all possible codes), which may include

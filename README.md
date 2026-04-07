@@ -7,6 +7,8 @@
 
 Simple Python CLI and library for any SDMX 2.1 REST API. Default provider: **Eurostat**. Built-in support for ISTAT, OECD, ECB, World Bank, and more.
 
+**The right way to get official statistics with AI.** Large language models are good at understanding questions, but they fabricate numerical data — research shows GenAI returns inaccurate statistics up to two-thirds of the time (IMF, *StatGPT: AI for Official Statistics*, 2026). The correct pattern is to use AI to *generate structured API queries*, not to generate the numbers. opensdmx is the execution layer for that pattern: the AI decides what to fetch, opensdmx fetches the exact published figure.
+
 > **Best used with AI.** opensdmx works well on its own, but **it shines when driven by an AI agent**: the CLI is designed to be composed, queried, and orchestrated step by step. For a guided, interactive experience — dataset discovery, schema exploration, filter selection, and data retrieval — pair it with the [`sdmx-explorer`](https://github.com/aborruso/opensdmx/blob/main/skills/sdmx-explorer/SKILL.md) Agent Skill included in this repo. See the [**installation guide**](https://github.com/aborruso/opensdmx/blob/main/docs/skill/README.md) for step-by-step instructions.
 
 ## Installation
@@ -344,6 +346,15 @@ See `.env.example` for a ready-to-use template.
 opensdmx.set_timeout()      # get current timeout (default: 300s)
 opensdmx.set_timeout(600)   # set to 10 minutes
 ```
+
+## Validation
+
+opensdmx was tested against the benchmark scenario described in the IMF [*StatGPT: AI for Official Statistics*](https://www.imf.org/en/publications/departmental-papers-policy-papers/issues/2026/03/10/statgpt-ai-for-official-statistics-573514) paper (2026).
+Three independent AI agents received the same natural language question about G7 GDP growth,
+worked through the full skill loop autonomously, and produced **42/42 identical observations** —
+zero divergence across agents, zero variance on repeated calls.
+
+See [docs/validation-statgpt.md](docs/validation-statgpt.md) for the full test and results.
 
 ## Acknowledgements
 

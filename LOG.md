@@ -1,5 +1,12 @@
 # LOG
 
+## 2026-04-07 (7)
+
+- feat(portals): add IMF as built-in provider (`--provider imf`) — base URL `https://api.imf.org/external/sdmx/2.1`, agency `IMF.RES`, `catalog_agency=all`; WEO dataflow confirmed working (3 dimensions: COUNTRY, INDICATOR, FREQUENCY)
+- docs(readme): add framing paragraph on AI+statistics accuracy problem, citing IMF StatGPT paper (2026)
+- docs(validation): add `docs/validation-statgpt.md` — public validation doc inspired by StatGPT paper; 3-agent convergence test (42/42 identical values), cross-source accuracy, repeatability with provenance metadata; linked from README
+- docs(validation): add `tmp/statgpt-tests/REPORT.md` — full technical report with all 8 tests
+
 ## 2026-04-07 (6)
 
 - fix(worldbank): handle missing observation values (`[,0]` → `[null,0]`) in SDMX-JSON responses — World Bank API returns invalid JSON for null observations

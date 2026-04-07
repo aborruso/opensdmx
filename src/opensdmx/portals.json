@@ -68,5 +68,12 @@
     "description": "The bank for central banks. Global financial statistics: international credit, debt securities, exchange rates, banking flows, derivatives and property prices. Data contributed by 63 central banks worldwide.",
     "base_url": "https://stats.bis.org/api/v1",
     "agency_id": "BIS"
+  },
+  "imf": {
+    "name": "International Monetary Fund",
+    "description": "IMF statistical databases. Includes the World Economic Outlook (WEO) with GDP growth, inflation and fiscal forecasts for 190+ countries; Balance of Payments; Financial Soundness Indicators; and more. Use dataflow WEO with agency IMF.RES for WEO data. Country codes: ISO alpha-3 (USA, DEU, JPN). Codelists are not inline in DSD — use opensdmx get with wildcard dimensions or check codelist endpoints directly.",
+    "base_url": "https://api.imf.org/external/sdmx/2.1",
+    "agency_id": "IMF.RES",
+    "catalog_agency": "all"
   }
 }
