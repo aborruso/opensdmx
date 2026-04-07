@@ -453,6 +453,9 @@ fixes — see [references/visualization.md](references/visualization.md).
 For other chart types not supported by `opensdmx plot` (heatmaps, grouped/dodge bars),
 write a short Python script using plotnine directly.
 
+For DuckDB installation and common data-prep patterns, see
+[references/duckdb-setup.md](references/duckdb-setup.md).
+
 Key points:
 - Always prepare data with DuckDB before plotting (separate units, limit series,
   remove aggregates, use year strings for annual data)
