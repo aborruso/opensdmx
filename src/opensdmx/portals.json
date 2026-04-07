@@ -20,13 +20,17 @@
     "base_url": "https://esploradati.istat.it/SDMXWS/rest",
     "agency_id": "IT1",
     "rate_limit": 13.0,
-    "language": "it"
+    "language": "it",
+    "constraints_supported": true,
+    "last_n_supported": true
   },
   "ecb": {
     "name": "European Central Bank",
     "description": "ECB Statistical Data Warehouse. Covers monetary policy, banking supervision, exchange rates, balance of payments and financial statistics for the euro area.",
     "base_url": "https://data-api.ecb.europa.eu/service",
-    "agency_id": "ECB"
+    "agency_id": "ECB",
+    "constraints_supported": false,
+    "last_n_supported": true
   },
   "oecd": {
     "name": "OECD",
@@ -42,7 +46,9 @@
     "name": "INSEE",
     "description": "French National Institute of Statistics and Economic Studies. Covers French population, economy, employment, prices and social indicators via the BDM macro-economic time series database.",
     "base_url": "https://www.bdm.insee.fr/series/sdmx",
-    "agency_id": "FR1"
+    "agency_id": "FR1",
+    "constraints_supported": false,
+    "last_n_supported": true
   },
   "bundesbank": {
     "name": "Deutsche Bundesbank",
@@ -50,7 +56,9 @@
     "base_url": "https://api.statistiken.bundesbank.de/rest",
     "agency_id": "BBK",
     "metadata_prefix": "metadata",
-    "datastructure_agency": "BBK"
+    "datastructure_agency": "BBK",
+    "constraints_supported": false,
+    "last_n_supported": true
   },
   "worldbank": {
     "name": "World Bank",
@@ -60,19 +68,24 @@
     "data_accept": "application/vnd.sdmx.data+json;version=1.0.0-wd",
     "data_path_suffix": "/",
     "unsupported_params": ["lastNObservations", "firstNObservations"],
+    "constraints_supported": false,
     "last_n_supported": false
   },
   "abs": {
     "name": "Australian Bureau of Statistics",
     "description": "Official Australian statistics. Covers population, economy, employment, trade, prices and environment for Australia and its territories.",
     "base_url": "https://data.api.abs.gov.au/rest",
-    "agency_id": "ABS"
+    "agency_id": "ABS",
+    "constraints_supported": true,
+    "last_n_supported": true
   },
   "bis": {
     "name": "Bank for International Settlements",
     "description": "The bank for central banks. Global financial statistics: international credit, debt securities, exchange rates, banking flows, derivatives and property prices. Data contributed by 63 central banks worldwide.",
     "base_url": "https://stats.bis.org/api/v1",
-    "agency_id": "BIS"
+    "agency_id": "BIS",
+    "constraints_supported": true,
+    "last_n_supported": true
   },
   "imf": {
     "name": "International Monetary Fund",

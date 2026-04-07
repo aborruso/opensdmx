@@ -20,13 +20,19 @@ declare -A PROBES=(
   [eurostat]="TEC00115"
   [istat]="151_929"
   [ecb]="EXR"
-  [oecd]="DSD_NAMAIN10@DF_TABLE1_EXPENDITURE_GROWTH"
+  [oecd]="DSD_SOCX_AGG@DF_NET_GDP"
   [insee]="CNA-2010-PIB"
   [bundesbank]="BBSEI"
-  [worldbank]="DF_WITS_TradeStats_Tariff"
+  [worldbank]="DF_WITI_TRADE"
   [abs]="ANA_EXP"
   [bis]="WS_CREDIT_GAP"
   [imf]="WEO"
+)
+
+# Optional extra filters for last_n test (provider -> "DIM VALUE ...")
+# Used to avoid 500 errors on providers that reject wildcard requests with lastN.
+declare -A LAST_N_FILTERS=(
+  [imf]="--COUNTRY USA --INDICATOR NGDP_RPCH --FREQUENCY A"
 )
 
 PROVIDERS=(eurostat istat ecb oecd insee bundesbank worldbank abs bis imf)
@@ -44,9 +50,11 @@ test_constraints() {
 
 test_last_n() {
   local provider="$1" probe="$2"
-  # Pass --last-n 1 with no other filters; check for explicit "not supported" error.
+  local extra_filters="${LAST_N_FILTERS[$provider]:-}"
+  # Pass --last-n 1; some providers need filters to avoid 500 on wildcard requests.
   local out
-  out=$(opensdmx get "$probe" --provider "$provider" --last-n 1 2>&1) || true
+  # shellcheck disable=SC2086
+  out=$(opensdmx get "$probe" --provider "$provider" --last-n 1 $extra_filters 2>&1) || true
   if echo "$out" | grep -qi "not supported\|lastNObservations\|unsupported"; then
     echo "false"
   elif echo "$out" | grep -q "TIME_PERIOD\|OBS_VALUE"; then

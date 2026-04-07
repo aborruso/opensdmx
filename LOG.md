@@ -1,5 +1,10 @@
 # LOG
 
+## 2026-04-07 (16)
+
+- chore: bump version to v0.3.23
+- feat(providers): fill all capability columns from probe run; fix probe_providers.sh (IMF filters, OECD dataset)
+
 ## 2026-04-07 (15)
 
 - chore: bump version to v0.3.22
