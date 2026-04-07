@@ -534,8 +534,10 @@ opensdmx values WDI REF_AREA --provider worldbank 2>&1 | grep -i "italy\|germany
 # → ITA, DEU (not IT, DE)
 
 # Step 4 — build query (skip constraints — endpoint returns 400)
+# IMPORTANT: always use --start-period / --end-period for time filtering.
+# --last-n is NOT supported by World Bank and will cause a parse error.
 opensdmx get WDI --provider worldbank --SERIES NY_GDP_PCAP_KD \
-  --REF_AREA ITA+DEU+FRA --start-period 2000
+  --REF_AREA ITA+DEU+FRA --start-period 2000 --end-period 2023
 ```
 
 If data retrieval fails with HTTP 401/307 (known bug, issue #5), offer the equivalent
