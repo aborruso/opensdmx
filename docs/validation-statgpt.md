@@ -20,30 +20,22 @@ This document reports a validation test inspired by the StatGPT paper, run in Ap
 
 ---
 
-## The test
+## The tests
 
-Three AI agents were launched in parallel, in complete isolation — no shared context, no shared
-memory. Each received the same natural language request:
+The test was run twice, with different conditions, to measure both provider-choice convergence
+and value convergence.
+
+### Round 1 — open provider choice (OECD vs others)
+
+Three agents launched in parallel, no shared context. Each received the same request:
 
 > *"I need GDP growth data for G7 countries (Canada, France, Germany, Italy, Japan, United Kingdom,
 > United States) from 2019 to 2024."*
 
-Each agent worked autonomously through the full `sdmx-explorer` skill loop:
+Agents were free to choose any available provider (Eurostat, OECD, IMF, etc.) and worked
+autonomously through the full `sdmx-explorer` skill loop: discovery → schema → retrieval.
 
-1. **Discovery** — search for relevant datasets across providers
-2. **Schema** — explore the dataset structure and available filter codes
-3. **Retrieval** — build and execute the query, save the CSV
-
-The outputs were then compared: Did the agents choose the same provider and dataset? Did they
-construct the same query? Did they produce the same numbers?
-
----
-
-## Results
-
-### Query convergence
-
-All three agents independently converged on the same answer:
+**Query convergence:**
 
 | | Agent 1 | Agent 2 | Agent 3 |
 |---|---|---|---|
@@ -52,16 +44,10 @@ All three agents independently converged on the same answer:
 | Key filter | `TRANSACTION=B1GQ`, `UNIT_MEASURE=PC` | same | same |
 | Countries | CAN+DEU+FRA+GBR+ITA+JPN+USA | same | same |
 
-All three rejected Eurostat (which lacks US, Japan, Canada) and chose OECD for the same reason:
-full G7 coverage. The reasoning was identical across agents despite complete isolation.
+All three rejected Eurostat (missing US, Japan, Canada) and chose OECD. Reasoning identical
+across agents despite complete isolation.
 
-### Value convergence
-
-The three output CSV files were compared row by row:
-
-```
-42 / 42 observations match exactly — zero divergence
-```
+**Value convergence:** `42 / 42 observations match exactly — zero divergence`
 
 | Country | 2019 | 2020 | 2021 | 2022 | 2023 | 2024 |
 |---|---|---|---|---|---|---|
@@ -73,8 +59,47 @@ The three output CSV files were compared row by row:
 | United Kingdom | 1.26 | -10.05 | 8.54 | 5.15 | 0.27 | 1.08 |
 | United States | 2.58 | -2.08 | 6.15 | 2.52 | 2.93 | 2.79 |
 
-*Source: OECD National Accounts, chain-linked volume, % change on previous year.
-Retrieved via opensdmx, April 2026.*
+*Source: OECD National Accounts, chain-linked volume, % change on previous year.*
+
+---
+
+### Round 2 — IMF WEO (the paper's own source)
+
+The StatGPT paper uses **IMF World Economic Outlook** data as its benchmark — all tables
+compare ChatGPT responses against *"actual World Economic Outlook estimates"*. The first
+round did not use WEO because the IMF provider was newly added and agents lacked that context.
+
+A second round was run targeting WEO directly, again with three isolated agents:
+
+> *"I need GDP growth data for G7 countries from 2019 to 2024." — use `--provider imf`*
+
+**Query convergence:**
+
+| | Agent 1 | Agent 2 | Agent 3 |
+|---|---|---|---|
+| Provider | IMF | IMF | IMF |
+| Dataset | `WEO` | `WEO` | `WEO` |
+| Indicator | `NGDP_RPCH` | `NGDP_RPCH` | `NGDP_RPCH` |
+| Countries | CAN+DEU+FRA+GBR+ITA+JPN+USA | same | same |
+
+All three independently identified `NGDP_RPCH` ("GDP, Constant prices, Percent change")
+as the correct indicator via `opensdmx constraints WEO INDICATOR --provider imf`.
+
+**Value convergence:** `42 / 42 observations match exactly — zero divergence`
+
+| Country | 2019 | 2020 | 2021 | 2022 | 2023 | 2024 |
+|---|---|---|---|---|---|---|
+| Canada | 1.908 | -5.038 | 5.951 | 4.189 | 1.529 | 1.555 |
+| France | 2.091 | -7.603 | 6.794 | 2.801 | 1.619 | 1.102 |
+| Germany | 0.973 | -4.127 | 3.913 | 1.807 | -0.872 | -0.496 |
+| Italy | 0.429 | -8.868 | 8.931 | 4.821 | 0.715 | 0.726 |
+| Japan | -0.402 | -4.169 | 2.697 | 0.960 | 1.245 | 0.104 |
+| United Kingdom | 1.624 | -10.297 | 8.576 | 4.839 | 0.397 | 1.101 |
+| United States | 2.584 | -2.081 | 6.152 | 2.524 | 2.935 | 2.793 |
+
+*Source: IMF World Economic Outlook (WEO), `NGDP_RPCH`, retrieved via opensdmx.*
+
+These are the same figures the StatGPT paper uses as ground truth in its accuracy tables.
 
 ---
 
@@ -84,14 +109,15 @@ The StatGPT paper tests ChatGPT with the same question across 10 separate conver
 The results vary by 0.8–12.6 percentage points per series — the model fabricates plausible
 but incorrect figures, and the figures change with each call.
 
-This test inverts the experiment: three separate agents, same question, same tool.
+These two rounds invert the experiment: six separate agents across two rounds, same question,
+same tool, zero divergence in both.
 
-The result demonstrates two properties that make opensdmx suitable as an AI data layer:
+The results demonstrate two properties that make opensdmx suitable as an AI data layer:
 
 **1. The AI layer converges when the question has a clear best answer.**
 LLMs are non-deterministic, but the skill's discovery logic has a dominant correct path for
-well-defined questions. All three agents independently reached the same dataset and the same
-filters — the LLM variance is absorbed at the reasoning level, not at the number level.
+well-defined questions. All agents independently reached the same dataset and the same
+filters — LLM variance is absorbed at the reasoning level, not at the number level.
 
 **2. The data layer is deterministic by construction.**
 Once the query is built, `opensdmx get` calls the SDMX API and returns exactly what the

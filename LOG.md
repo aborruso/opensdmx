@@ -1,5 +1,9 @@
 # LOG
 
+## 2026-04-07 (9)
+
+- docs(validation): update validation-statgpt.md — add Round 2 (IMF WEO, 3 agents, 42/42 match); now covers both OECD and WEO convergence tests
+
 ## 2026-04-07 (8)
 
 - chore: bump version to v0.3.19
