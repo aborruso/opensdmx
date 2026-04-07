@@ -14,6 +14,7 @@ def _isolated_db(tmp_path, monkeypatch):
     """Redirect db_cache to a temporary SQLite database for every test."""
     db_file = tmp_path / "test_cache.db"
     monkeypatch.setattr(db_cache, "_get_db_path", lambda: db_file)
+    monkeypatch.setattr(db_cache, "_DB_INITIALIZED", False)
 
 
 # ── structure dims ───────────────────────────────────────────────────
