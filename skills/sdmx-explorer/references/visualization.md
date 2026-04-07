@@ -15,6 +15,7 @@ The built-in `opensdmx plot` command supports three chart types via `--geom`:
 | `bar`    | Vertical bar chart     | Comparing categories over time    | With `--color` produces stacked bars         |
 | `barh`   | Horizontal bar chart   | Rankings, sorted comparisons      | Bars auto-sorted by value (ascending). **Axis swap**: `--x` = numeric value (horizontal), `--y` = category (vertical) |
 | `point`  | Scatter plot           | Correlations between two variables| Uses `geom_point` only, no connecting lines  |
+| `heatmap`| Heatmap (tile grid)    | Intensity across two categories   | `--x` = columns, `--color` = rows, `--y` = fill value. Requires `--color` |
 
 Use `--facet <column>` + `--ncol <n>` for small multiples (one panel per value).
 Always check `opensdmx plot --help` to confirm a chart type is not supported before

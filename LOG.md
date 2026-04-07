@@ -1,5 +1,11 @@
 # LOG
 
+## 2026-04-07 (4)
+
+- feat(plot): add `--geom heatmap` using `geom_tile` — `--x` = columns, `--color` = rows, `--y` = fill intensity
+- docs(skill): add heatmap to visualization.md geom table
+- chore: bump version to v0.3.16
+
 ## 2026-04-07 (3)
 
 - feat(plot): add `--x-all` flag to force all x-axis tick labels on discrete axes (e.g. quarterly labels) — uses `scale_x_discrete(limits=...)`, works with `--facet` and `--color`

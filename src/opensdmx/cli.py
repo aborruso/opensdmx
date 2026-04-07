@@ -812,7 +812,7 @@ def plot(
     """
     import matplotlib
     matplotlib.use("Agg")
-    from plotnine import aes, coord_flip, element_text, facet_wrap, geom_col, geom_line, geom_point, ggplot, labs, scale_x_date, theme, theme_minimal
+    from plotnine import aes, coord_flip, element_text, facet_wrap, geom_col, geom_line, geom_point, geom_tile, ggplot, labs, scale_x_date, theme, theme_minimal
 
     import polars as pl
 
@@ -874,11 +874,28 @@ def plot(
 
     if geom == "scatter":
         geom = "point"
-    if geom not in ("line", "bar", "barh", "point"):
-        err_console.print(f"[red]Error:[/red] unknown --geom '{geom}'. Use: line, bar, barh, point, scatter")
+    if geom not in ("line", "bar", "barh", "point", "heatmap"):
+        err_console.print(f"[red]Error:[/red] unknown --geom '{geom}'. Use: line, bar, barh, point, scatter, heatmap")
         raise typer.Exit(1)
 
-    if geom in ("bar", "barh"):
+    if geom == "heatmap":
+        import pandas as pd
+        if not color:
+            err_console.print("[red]Error:[/red] --geom heatmap requires --color to specify the row variable")
+            raise typer.Exit(1)
+        if pd.api.types.is_numeric_dtype(pdf[x]):
+            pdf[x] = pdf[x].astype(str)
+        elif pd.api.types.is_datetime64_any_dtype(pdf[x]):
+            pdf[x] = pdf[x].dt.year.astype(str)
+        aes_mapping = aes(x=x, y=color, fill=y)
+        p = ggplot(pdf, aes_mapping) + geom_tile()
+        p = p + labs(
+            title=title or ds_description,
+            x=xlabel or x,
+            y=ylabel or color,
+            fill=y,
+        ) + theme_minimal()
+    elif geom in ("bar", "barh"):
         import pandas as pd
 
         # For bar (vertical): x is the category axis — convert to string to avoid misinterpretation.
