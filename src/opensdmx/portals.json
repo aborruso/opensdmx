@@ -10,7 +10,9 @@
     "constraint_endpoint": "contentconstraint",
     "datastructure_agency": "ESTAT",
     "data_format_param": "SDMX-CSV",
-    "dataflow_page_url": "https://ec.europa.eu/eurostat/databrowser/product/page/{dataflow_id}"
+    "dataflow_page_url": "https://ec.europa.eu/eurostat/databrowser/product/page/{dataflow_id}",
+    "constraints_supported": true,
+    "last_n_supported": true
   },
   "istat": {
     "name": "ISTAT",
@@ -32,7 +34,9 @@
     "base_url": "https://sdmx.oecd.org/public/rest",
     "agency_id": "OECD",
     "catalog_agency": "all",
-    "constraint_params": {}
+    "constraint_params": {},
+    "constraints_supported": false,
+    "last_n_supported": true
   },
   "insee": {
     "name": "INSEE",
@@ -55,7 +59,8 @@
     "agency_id": "WB",
     "data_accept": "application/vnd.sdmx.data+json;version=1.0.0-wd",
     "data_path_suffix": "/",
-    "unsupported_params": ["lastNObservations", "firstNObservations"]
+    "unsupported_params": ["lastNObservations", "firstNObservations"],
+    "last_n_supported": false
   },
   "abs": {
     "name": "Australian Bureau of Statistics",
@@ -71,9 +76,11 @@
   },
   "imf": {
     "name": "International Monetary Fund",
-    "description": "IMF statistical databases. Includes the World Economic Outlook (WEO) with GDP growth, inflation and fiscal forecasts for 190+ countries; Balance of Payments; Financial Soundness Indicators; and more. Use dataflow WEO with agency IMF.RES for WEO data. Country codes: ISO alpha-3 (USA, DEU, JPN). Codelists are not inline in DSD — use opensdmx get with wildcard dimensions or check codelist endpoints directly.",
+    "description": "IMF statistical databases. Includes the World Economic Outlook (WEO) with GDP growth, inflation and fiscal forecasts for 190+ countries; Balance of Payments; Financial Soundness Indicators; and more. Use dataflow WEO with agency IMF.RES for WEO data. Country codes: ISO alpha-3 (USA, DEU, JPN).",
     "base_url": "https://api.imf.org/external/sdmx/2.1",
     "agency_id": "IMF.RES",
-    "catalog_agency": "all"
+    "catalog_agency": "all",
+    "constraints_supported": true,
+    "last_n_supported": true
   }
 }

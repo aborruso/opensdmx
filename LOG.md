@@ -1,5 +1,9 @@
 # LOG
 
+## 2026-04-07 (14)
+
+- feat(providers): add constraints and last_n capability columns; mark known support in portals.json
+
 ## 2026-04-07 (13)
 
 - chore: bump version to v0.3.21

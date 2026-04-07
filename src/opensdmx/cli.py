@@ -570,6 +570,14 @@ def providers():
     """
     from .base import PROVIDERS
 
+    def _cap(cfg: dict, key: str) -> str:
+        val = cfg.get(key)
+        if val is True:
+            return "[green]✓[/green]"
+        if val is False:
+            return "[red]✗[/red]"
+        return "[dim]?[/dim]"
+
     if _output_mode != "table":
         data = [
             {
@@ -577,6 +585,8 @@ def providers():
                 "name": cfg.get("name", ""),
                 "description": cfg.get("description", ""),
                 "agency_id": cfg.get("agency_id", ""),
+                "constraints_supported": cfg.get("constraints_supported"),
+                "last_n_supported": cfg.get("last_n_supported"),
             }
             for alias, cfg in PROVIDERS.items()
         ]
@@ -594,6 +604,8 @@ def providers():
     table.add_column("name", no_wrap=True)
     table.add_column("description")
     table.add_column("agency", style="dim", no_wrap=True)
+    table.add_column("constraints", justify="center", no_wrap=True)
+    table.add_column("last_n", justify="center", no_wrap=True)
 
     for alias, cfg in PROVIDERS.items():
         table.add_row(
@@ -601,6 +613,8 @@ def providers():
             cfg.get("name", ""),
             cfg.get("description", ""),
             cfg.get("agency_id", ""),
+            _cap(cfg, "constraints_supported"),
+            _cap(cfg, "last_n_supported"),
         )
 
     console.print(table)
