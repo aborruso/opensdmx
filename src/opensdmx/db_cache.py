@@ -22,7 +22,7 @@ def _db_conn():
     global _DB_INITIALIZED
     conn = sqlite3.connect(_get_db_path(), timeout=10)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA journal_mode=DELETE")
     try:
         if not _DB_INITIALIZED:
             conn.executescript("""

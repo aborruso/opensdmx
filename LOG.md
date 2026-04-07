@@ -1,5 +1,10 @@
 # LOG
 
+## 2026-04-07 (2)
+
+- fix(cache): switch SQLite journal mode from WAL to DELETE — WAL creates `-wal`/`-shm` files that cause "database is locked" errors when accessing the cache across WSL/Windows filesystem boundaries (closes #7)
+- chore: bump version to v0.3.14
+
 ## 2026-04-07
 
 - fix(cache): SQLite connections were never closed — replaced raw `sqlite3.connect` context manager with proper open/commit/close pattern, added WAL mode and timeout to prevent lock contention
