@@ -154,6 +154,31 @@ def search_dataset(keyword: str) -> pl.DataFrame:
     return _score_results(results, tokens)
 
 
+def _resolve_codelist_from_concept(scheme_id: str, scheme_agency: str, concept_id: str) -> str | None:
+    """Fetch a concept scheme and return the codelist ID from CoreRepresentation/Enumeration.
+
+    Used as fallback when a DSD dimension lacks LocalRepresentation (e.g. IMF).
+    Per SDMX 2.1 spec, the codelist may be attached to the concept rather than
+    repeated in each DSD's LocalRepresentation.
+    """
+    try:
+        path = _struct_path(f"conceptscheme/{scheme_agency}/{scheme_id}/latest")
+        content = sdmx_request_xml(path)
+        root, ns = xml_parse(content)
+        struct_ns = ns.get("structure", "")
+        tag = f"{{{struct_ns}}}Concept" if struct_ns else "Concept"
+        for concept_node in root.iter(tag):
+            if xml_attr_safe(concept_node, "id") == concept_id:
+                enum_ref = concept_node.find(
+                    f".//{{{struct_ns}}}CoreRepresentation//{{{struct_ns}}}Enumeration//Ref"
+                ) if struct_ns else None
+                if enum_ref is not None:
+                    return enum_ref.get("id")
+    except Exception:
+        pass
+    return None
+
+
 def _get_dimensions(structure_id: str) -> dict:
     """Fetch dimension metadata for a data structure definition."""
     from .db_cache import get_cached_dims, save_dims
@@ -177,9 +202,19 @@ def _get_dimensions(structure_id: str) -> dict:
         if not dim_id:
             continue
 
-        # Codelist reference
+        # Codelist reference — first try LocalRepresentation (standard path),
+        # then fall back to ConceptIdentity → ConceptScheme (used by IMF SDMX 2.1).
         local_rep = dim_node.find(f".//{{{struct_ns}}}LocalRepresentation//Ref") if struct_ns else None
         codelist_id = local_rep.get("id") if local_rep is not None else None
+
+        if codelist_id is None and struct_ns:
+            concept_ref = dim_node.find(f".//{{{struct_ns}}}ConceptIdentity//Ref")
+            if concept_ref is not None:
+                cs_id = concept_ref.get("maintainableParentID")
+                cs_agency = concept_ref.get("agencyID")
+                concept_ref_id = concept_ref.get("id")
+                if cs_id and cs_agency and concept_ref_id:
+                    codelist_id = _resolve_codelist_from_concept(cs_id, cs_agency, concept_ref_id)
 
         dims[dim_id] = {
             "id": dim_id,

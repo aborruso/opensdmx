@@ -1,5 +1,9 @@
 # LOG
 
+## 2026-04-07 (12)
+
+- fix(discovery): resolve codelist from concept scheme when DSD lacks LocalRepresentation (fixes `values` for IMF provider)
+
 ## 2026-04-07 (11)
 
 - chore: bump version to v0.3.20
