@@ -1,5 +1,9 @@
 # LOG
 
+## 2026-04-07 (8)
+
+- chore: bump version to v0.3.19
+
 ## 2026-04-07 (7)
 
 - feat(portals): add IMF as built-in provider (`--provider imf`) — base URL `https://api.imf.org/external/sdmx/2.1`, agency `IMF.RES`, `catalog_agency=all`; WEO dataflow confirmed working (3 dimensions: COUNTRY, INDICATOR, FREQUENCY)
