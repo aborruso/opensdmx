@@ -778,7 +778,7 @@ def plot(
     x: str = typer.Option("TIME_PERIOD", "--x", "--time", help="Column for X axis (default: TIME_PERIOD)"),
     y: str = typer.Option("OBS_VALUE", "--y", help="Column for Y axis"),
     color: Optional[str] = typer.Option(None, "--color", help="Column for color grouping"),
-    geom: str = typer.Option("line", "--geom", help="Chart type: line, bar, barh, point, scatter"),
+    geom: str = typer.Option("line", "--geom", help="Chart type: line, bar, barh, point, scatter, heatmap"),
     title: Optional[str] = typer.Option(None, "--title", help="Chart title (default: dataset description)"),
     xlabel: Optional[str] = typer.Option(None, "--xlabel", help="X axis label (default: column name)"),
     ylabel: Optional[str] = typer.Option(None, "--ylabel", help="Y axis label (default: column name)"),
@@ -795,7 +795,7 @@ def plot(
     end_period: Optional[str] = typer.Option(None, "--end-period", help="End period (e.g. 2023, 2023-Q4, 2023-12)"),
     provider: Optional[str] = typer.Option(None, "--provider", "-p", help=_PROVIDER_HELP),
 ):
-    """Plot data as a chart (line, bar, horizontal bar, or scatter).
+    """Plot data as a chart (line, bar, barh, point, heatmap).
 
     INPUT can be a dataflow ID (fetches from SDMX) or a local file
     (.csv, .tsv, .parquet). Extra --DIM VALUE pairs are used as filters
@@ -810,6 +810,9 @@ def plot(
       opensdmx plot /tmp/data.csv --color sex --facet age --ncol 2
       opensdmx plot /tmp/data.csv --geom bar --color tipo --rotate-x 45
       opensdmx plot /tmp/data.csv --color cat --colors '#E69F00,#56B4E9,#009E73'
+      opensdmx plot /tmp/data.csv --color sex --facet age --ncol 2 --theme tufte
+      opensdmx plot /tmp/data.csv --x quarter --y value --rotate-x 45 --x-all
+      opensdmx plot /tmp/data.csv --geom heatmap --x year --color geo --theme 538
     """
     import matplotlib
     matplotlib.use("Agg")

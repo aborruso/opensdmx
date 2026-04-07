@@ -21,7 +21,7 @@ Use `--facet <column>` + `--ncol <n>` for small multiples (one panel per value).
 Always check `opensdmx plot --help` to confirm a chart type is not supported before
 falling back to Python.
 
-For chart types not supported by `opensdmx plot` — heatmaps, grouped (dodge) bars,
+For chart types not supported by `opensdmx plot` — grouped (dodge) bars,
 box plots — write a short Python script using plotnine directly. plotnine supports
 the full Grammar of Graphics: `geom_bar`, `geom_col`, `geom_tile`, `geom_boxplot`,
 `facet_grid`, `coord_flip`, `position_dodge`, custom scales, and themes.
