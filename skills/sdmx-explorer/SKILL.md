@@ -233,18 +233,23 @@ opensdmx values <dataflow_id> REF_AREA --provider istat
 opensdmx values <dataflow_id> DATA_TYPE --provider istat
 ```
 
-`values` returns the full codelist (all theoretically possible codes). For ISTAT this is
-usually reliable enough because ISTAT codelists tend to be well-aligned with actual data.
-Use `grep -i` to find specific codes (e.g. city names, indicators).
+`values` returns the **full theoretical codelist** — codes that exist in the codelist
+definition, not necessarily in this specific dataflow. Most ISTAT codes are reliable,
+but some may be absent from a given dataflow (e.g. a versioned code like `LBIRTH_FROM2017`
+may appear in the codelist but the dataflow only uses the base code `LBIRTH`).
+Use `grep -i` to find candidate codes, then always verify with `get`.
 
 Step 3 — go directly to `get` with filters and verify with a narrow query:
 ```bash
 opensdmx get <dataflow_id> --provider istat --REF_AREA <code> --last-n 1
 ```
 
-If the query returns a 404 or empty result, the code may not be present in this dataflow.
-**Only then** fall back to `opensdmx constraints` to check which codes are actually
-available — but be aware it may take 30–60+ seconds or time out on large datasets.
+If the query returns a 404 or empty result:
+1. **Try the base form of the code** — remove any suffix that looks like a version or date
+   (e.g. `LBIRTH_FROM2017` → try `LBIRTH`; `POP_1JAN2021` → try `POP_1JAN`).
+2. **Only if that also fails**, fall back to `opensdmx constraints` to check which codes
+   are actually available — but be aware it may take 30–60+ seconds or time out on large
+   datasets.
 
 ### Extract from both flows
 
