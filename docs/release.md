@@ -33,6 +33,9 @@ gh release create vX.Y.Z --title "vX.Y.Z" --notes "release notes here"
 # 8. Build and publish to PyPI
 uv build
 twine upload dist/opensdmx-X.Y.Z*
+
+# 9. Update local CLI
+uv tool install --editable .
 ```
 
 ## Checklist
@@ -48,3 +51,4 @@ Every release MUST complete all steps in order:
 - [ ] Pushed to GitHub with tags (`git push origin main --tags`)
 - [ ] GitHub release created with notes (`gh release create`)
 - [ ] Built and published to PyPI (`uv build && twine upload`)
+- [ ] Local CLI updated (`uv tool install --editable .`)
