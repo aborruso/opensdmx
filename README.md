@@ -5,6 +5,8 @@
 
 # opensdmx
 
+> **Note:** This is an experimental tool — help us test it by [opening issues](https://github.com/ondata/opensdmx/issues) or sharing feedback.
+
 Simple Python CLI and library for any SDMX 2.1 REST API. Default provider: **Eurostat**. Built-in support for ISTAT, OECD, ECB, World Bank, and more.
 
 **The right way to get official statistics with AI.** Large language models are good at understanding questions, but they fabricate numerical data — research shows GenAI returns inaccurate statistics up to two-thirds of the time (IMF, *StatGPT: AI for Official Statistics*, 2026). The correct pattern is to use AI to *generate structured API queries*, not to generate the numbers. opensdmx is the execution layer for that pattern: the AI decides what to fetch, opensdmx fetches the exact published figure.
