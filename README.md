@@ -5,7 +5,7 @@
 
 # opensdmx
 
-> **Note:** This is an experimental tool — help us test it by [opening issues](https://github.com/ondata/opensdmx/issues) or sharing feedback.
+> **Note:** this is an experimental tool — help us test it by [opening issues](https://github.com/ondata/opensdmx/issues) or sharing feedback.
 
 Simple Python CLI and library for any SDMX 2.1 REST API. Default provider: **Eurostat**. Built-in support for ISTAT, OECD, ECB, World Bank, and more.
 
