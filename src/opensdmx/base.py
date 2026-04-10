@@ -257,12 +257,11 @@ def sdmx_request_csv(path: str, **params):
         unsupported = provider.get("unsupported_params", [])
         dropped = [p for p in unsupported if p in params]
         if dropped:
-            import warnings
-            warnings.warn(
-                f"Provider '{provider.get('name', '')}' does not support: {', '.join(dropped)}. "
-                "These parameters will be ignored.",
-                UserWarning,
-                stacklevel=3,
+            import logging
+            logging.getLogger(__name__).warning(
+                "Provider '%s' does not support: %s. These parameters will be ignored.",
+                provider.get('name', ''),
+                ', '.join(dropped),
             )
         filtered_params = {k: v for k, v in params.items() if k not in unsupported}
         resp = sdmx_request(path + suffix, accept=data_accept, **filtered_params)

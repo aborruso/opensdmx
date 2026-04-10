@@ -6,8 +6,10 @@ from __future__ import annotations
 class ConstraintsUnavailable(Exception):
     """Raised when the availableconstraint endpoint returns 500 (hidden/not-yet-public dataflow)."""
 
+import logging
 import time
-import warnings
+
+logger = logging.getLogger(__name__)
 
 import httpx
 import polars as pl
@@ -149,7 +151,6 @@ def search_dataset(keyword: str) -> pl.DataFrame:
 
     results = datasets.filter(filter_expr)
     if results.is_empty():
-        warnings.warn(f"No datasets found matching keyword: {keyword}", stacklevel=2)
         return results
     return _score_results(results, tokens)
 
@@ -230,7 +231,7 @@ def _get_dimensions(structure_id: str) -> dict:
     try:
         save_dims(structure_id, result)
     except Exception as e:
-        warnings.warn(f"Could not cache dimension metadata: {e}", stacklevel=2)
+        logger.warning("Could not cache dimension metadata: %s", e)
     return result
 
 
@@ -254,7 +255,7 @@ def _get_dimension_description(codelist_id: str | None) -> str | None:
     try:
         save_codelist_info(codelist_id, description)
     except Exception as e:
-        warnings.warn(f"Could not cache codelist info: {e}", stacklevel=2)
+        logger.warning("Could not cache codelist info: %s", e)
     return description
 
 
@@ -361,7 +362,7 @@ def get_dimension_values(dataset: dict, dimension_id: str) -> pl.DataFrame:
 
     codelist_id = dataset["dimensions"][dimension_id]["codelist_id"]
     if not codelist_id:
-        warnings.warn(f"No codelist found for dimension: {dimension_id}", stacklevel=2)
+        logger.warning("No codelist found for dimension: %s", dimension_id)
         return pl.DataFrame({"id": [], "name": []})
 
     from .db_cache import get_cached_codelist_values, save_codelist_values
@@ -386,7 +387,7 @@ def get_dimension_values(dataset: dict, dimension_id: str) -> pl.DataFrame:
     try:
         save_codelist_values(codelist_id, records)
     except Exception as e:
-        warnings.warn(f"Could not cache codelist values: {e}", stacklevel=2)
+        logger.warning("Could not cache codelist values: %s", e)
     return pl.DataFrame(records, schema={"id": pl.Utf8, "name": pl.Utf8})
 
 
@@ -436,13 +437,13 @@ def get_available_values(dataset: dict) -> dict[str, pl.DataFrame]:
         import httpx
         if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 500:
             raise ConstraintsUnavailable(df_id) from e
-        warnings.warn(f"Could not retrieve available values: {e}", stacklevel=2)
+        logger.warning("Could not retrieve available values: %s", e)
         return {}
 
     try:
         save_available_constraints(df_id, result)
     except Exception as e:
-        warnings.warn(f"Could not cache constraint values: {e}", stacklevel=2)
+        logger.warning("Could not cache constraint values: %s", e)
 
     return {dim_id: pl.DataFrame({"id": codes}) for dim_id, codes in result.items()}
 
@@ -456,7 +457,7 @@ def set_filters(dataset: dict, **kwargs) -> dict:
     for key, value in kwargs.items():
         actual = dim_upper.get(key.upper())
         if actual is None:
-            warnings.warn(f"Dimension '{key}' not found. Ignoring.", stacklevel=2)
+            logger.warning("Dimension '%s' not found. Ignoring.", key)
             continue
         dataset["filters"][actual] = value
 
