@@ -175,7 +175,8 @@ def search(
     if semantic:
         from .embed import semantic_search
         try:
-            df = semantic_search(keyword, n=n)
+            with _status_ctx("[dim]Semantic search...[/dim]"):
+                df = semantic_search(keyword, n=n)
         except FileNotFoundError:
             err_console.print(
                 "[red]Error:[/red] Embeddings cache not found.\n"
@@ -830,7 +831,7 @@ def plot(
     rotate_x: Optional[int] = typer.Option(None, "--rotate-x", help="Rotate x-axis labels by N degrees (e.g. 45 or 90)"),
     x_all: bool = typer.Option(False, "--x-all", help="Show all x-axis tick labels (useful for discrete axes with few categories)"),
     colors: Optional[str] = typer.Option(None, "--colors", help="Comma-separated hex colors for fill/color scale (e.g. '#E69F00,#56B4E9,#009E73')"),
-    plot_theme: Optional[str] = typer.Option(None, "--theme", help="Plot theme: minimal (default), bw, classic, 538, tufte, void, dark, light, gray"),
+    plot_theme: Optional[str] = typer.Option(None, "--theme", help="Plot theme: minimal (default), bw, classic, 538, tufte, void, dark, light, gray, xkcd"),
     start_period: Optional[str] = typer.Option(None, "--start-period", help="Start period (e.g. 2020, 2020-Q1, 2020-01)"),
     end_period: Optional[str] = typer.Option(None, "--end-period", help="End period (e.g. 2023, 2023-Q4, 2023-12)"),
     provider: Optional[str] = typer.Option(None, "--provider", "-p", help=_PROVIDER_HELP),
@@ -873,10 +874,11 @@ def plot(
     }
 
     theme_name = plot_theme or "minimal"
-    if theme_name not in _THEME_MAP:
-        err_console.print(f"[red]Error:[/red] unknown --theme '{theme_name}'. Use: {', '.join(k for k in _THEME_MAP if k != 'grey')}")
+    use_xkcd = theme_name == "xkcd"
+    if not use_xkcd and theme_name not in _THEME_MAP:
+        err_console.print(f"[red]Error:[/red] unknown --theme '{theme_name}'. Use: {', '.join(k for k in _THEME_MAP if k != 'grey')}, xkcd")
         raise typer.Exit(1)
-    selected_theme = _THEME_MAP[theme_name]
+    selected_theme = _THEME_MAP["minimal"] if use_xkcd else _THEME_MAP[theme_name]
 
     import polars as pl
 
@@ -1046,7 +1048,12 @@ def plot(
         import re
         safe_name = re.sub(r"[^\w\-]", "_", ds_description.lower()).strip("_")
         out = Path(f"{safe_name}.png")
-    p.save(str(out), dpi=150, width=width, height=height)
+    import matplotlib.pyplot as plt
+    if use_xkcd:
+        with plt.xkcd():
+            p.save(str(out), dpi=150, width=width, height=height)
+    else:
+        p.save(str(out), dpi=150, width=width, height=height)
     console.print(f"[green]Saved:[/green] {out}")
 
 
